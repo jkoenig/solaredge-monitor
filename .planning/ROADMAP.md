@@ -56,9 +56,10 @@ Plans:
   3. .env.example file documents all required environment variables with descriptions
   4. .gitignore excludes .env files and sensitive data
 
-**Plans**: TBD
+**Plans:** 1 plan
 
-Plans: *(to be defined during planning)*
+Plans:
+- [ ] 02-01-PLAN.md -- Config dataclass with env loading, validation, .env.example, and requirements.txt
 
 ---
 
@@ -148,7 +149,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Cleanup & Fresh Repository | 2/2 | ✓ Complete | 2026-02-05 |
-| 2. Configuration Foundation | 0/TBD | Not started | - |
+| 2. Configuration Foundation | 0/1 | Not started | - |
 | 3. Architecture & Data Layer | 0/TBD | Not started | - |
 | 4. Display Layer | 0/TBD | Not started | - |
 | 5. Operations | 0/TBD | Not started | - |
