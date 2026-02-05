@@ -30,11 +30,11 @@
 
 ### Cleanup (CLN)
 
-- [ ] **CLN-01**: VW WeConnect integration removed entirely (code, imports, credentials)
-- [ ] **CLN-02**: BMW ConnectedDrive integration removed entirely (code, imports, credentials)
-- [ ] **CLN-03**: Time Machine disk monitoring removed entirely (SSH, Paramiko, credentials)
-- [ ] **CLN-04**: Unused Waveshare display drivers removed (keep only epd2in13_V3)
-- [ ] **CLN-05**: Fresh git repository with no credential history
+- [x] **CLN-01**: VW WeConnect integration removed entirely (code, imports, credentials)
+- [x] **CLN-02**: BMW ConnectedDrive integration removed entirely (code, imports, credentials)
+- [x] **CLN-03**: Time Machine disk monitoring removed entirely (SSH, Paramiko, credentials)
+- [x] **CLN-04**: Unused Waveshare display drivers removed (keep only epd2in13_V3)
+- [x] **CLN-05**: Fresh git repository with no credential history
 
 ### Display (DISP)
 
@@ -85,11 +85,11 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CLN-01 | Phase 1 | Pending |
-| CLN-02 | Phase 1 | Pending |
-| CLN-03 | Phase 1 | Pending |
-| CLN-04 | Phase 1 | Pending |
-| CLN-05 | Phase 1 | Pending |
+| CLN-01 | Phase 1 | Complete |
+| CLN-02 | Phase 1 | Complete |
+| CLN-03 | Phase 1 | Complete |
+| CLN-04 | Phase 1 | Complete |
+| CLN-05 | Phase 1 | Complete |
 | CFG-01 | Phase 2 | Pending |
 | CFG-02 | Phase 2 | Pending |
 | CFG-03 | Phase 2 | Pending |
