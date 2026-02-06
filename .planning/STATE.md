@@ -6,23 +6,23 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 **Core value:** Show the homeowner their solar energy state at a glance — production, battery, grid, consumption — on a physical e-ink display that's always up to date.
 
-**Current focus:** Phase 2 complete — ready for Phase 3
+**Current focus:** Phase 4 in progress — Display Layer
 
 ## Current Position
 
-Phase: 3 of 6 (Architecture - Data Layer)
-Plan: 3 of 3 completed
-Status: Phase complete
-Last activity: 2026-02-06 — Completed 03-03-PLAN.md (Display abstraction & integration)
+Phase: 4 of 6 (Display Layer)
+Plan: 1 of 5 completed
+Status: In progress
+Last activity: 2026-02-06 — Completed 04-01-PLAN.md (Rendering utilities)
 
-Progress: [██████░░░░] 60%
+Progress: [███████░░░] 78% (7/9 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
-- Average duration: 2.3 minutes
-- Total execution time: 0.23 hours
+- Total plans completed: 7
+- Average duration: 2.1 minutes
+- Total execution time: 0.25 hours
 
 **By Phase:**
 
@@ -31,9 +31,10 @@ Progress: [██████░░░░] 60%
 | 01 | 2 | 8.8 min | 4.4 min |
 | 02 | 1 | 2.0 min | 2.0 min |
 | 03 | 3 | 4.0 min | 1.3 min |
+| 04 | 1 | 1.4 min | 1.4 min |
 
 **Recent Trend:**
-- Last 5 plans: 2.0 min, 1.0 min, 2.0 min, 1.0 min, 1.0 min
+- Last 5 plans: 1.0 min, 2.0 min, 1.0 min, 1.0 min, 1.4 min
 - Trend: Excellent (consistently sub-2 min)
 
 *Updated after each plan completion*
@@ -60,6 +61,10 @@ Progress: [██████░░░░] 60%
 - Phase 3: PNG files saved to ./debug/ folder with timestamp naming
 - Phase 3: Render at 4x supersampling (1000x488) for high-quality e-ink output
 - Phase 3: Load dotenv before importing Config to ensure environment variables available
+- Phase 4: Font cache by (name, size) tuple to avoid repeated file I/O
+- Phase 4: Font search chain: project fonts/ -> Raspberry Pi system fonts -> PIL default
+- Phase 4: Percentage text rendered to right of bar for clarity (avoids white-on-black complexity)
+- Phase 4: All drawing functions accept (draw, x, y, size) signature for consistency
 
 ### Pending Todos
 
@@ -72,7 +77,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 03-03-PLAN.md (Display abstraction & integration) — Phase 3 complete
+Stopped at: Completed 04-01-PLAN.md (Rendering utilities) — Phase 4 plan 1 of 5
 Resume file: None
 
 ---
