@@ -118,3 +118,19 @@ class BatteryData:
     available_energy: float
     power: float
     fetched_at: datetime = field(default_factory=datetime.now)
+
+
+@dataclass(frozen=True)
+class ForecastData:
+    """Solar production forecast for today and tomorrow.
+
+    Data from Forecast.Solar API, cached for 1 hour.
+
+    Fields:
+        today_kwh: Forecasted production for today in kWh
+        tomorrow_kwh: Forecasted production for tomorrow in kWh
+        fetched_at: Timestamp when data was retrieved
+    """
+    today_kwh: float
+    tomorrow_kwh: float
+    fetched_at: datetime = field(default_factory=datetime.now)
