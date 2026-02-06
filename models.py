@@ -129,8 +129,10 @@ class ForecastData:
     Fields:
         today_kwh: Forecasted production for today in kWh
         tomorrow_kwh: Forecasted production for tomorrow in kWh
+        actual_production: Actual PV production today in kWh (from EnergyDetails, for progress bar)
         fetched_at: Timestamp when data was retrieved
     """
     today_kwh: float
     tomorrow_kwh: float
+    actual_production: float = 0.0
     fetched_at: datetime = field(default_factory=datetime.now)
