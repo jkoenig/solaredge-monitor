@@ -141,6 +141,9 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
 
+    # Setup structured JSON logging early (before Config so validation errors use JSON format)
+    setup_logging("INFO")
+
     # Load and validate configuration
     try:
         config = Config()
@@ -148,8 +151,8 @@ def main():
         logging.error(f"Configuration validation failed: {e}")
         sys.exit(1)
 
-    # Setup structured JSON logging
-    setup_logging(config.log_level)
+    # Adjust log level to configured value
+    logging.getLogger().setLevel(config.log_level)
 
     # Log startup info
     logging.info("SolarEdge Off-Grid Monitor starting")
