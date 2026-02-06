@@ -1,14 +1,18 @@
 """
 Bezug screen renderer.
 
-Full-screen display showing total energy purchased from the grid.
-Uses all available space for maximum readability.
+Shows total energy purchased from the grid.
+Uses unified layout grid matching all other screens.
 """
 
 from PIL import Image, ImageDraw
 from models import EnergyDetails
 from rendering.fonts import load_font
 from rendering.bars import draw_horizontal_bar
+
+# Unified layout constants (shared across all screens)
+MARGIN = 15
+CANVAS_W, CANVAS_H = 1000, 488
 
 
 def render_purchased_screen(data: EnergyDetails) -> Image:
@@ -21,56 +25,49 @@ def render_purchased_screen(data: EnergyDetails) -> Image:
     Returns:
         1000x488 1-bit PIL Image ready for e-ink display
     """
-    # Create image: mode '1' for 1-bit monochrome, white background (1)
-    img = Image.new('1', (1000, 488), 1)
+    img = Image.new('1', (CANVAS_W, CANVAS_H), 1)
     draw = ImageDraw.Draw(img)
 
-    # Load fonts (large but sized to ensure bar label fits above bar)
-    label_font = load_font('Arial.ttf', 56)
-    value_font = load_font('ArialBlack.ttf', 160)
-    unit_font = load_font('Arial.ttf', 48)
-    bar_font = load_font('Arial.ttf', 32)
+    # Fonts (unified across all screens)
+    label_font = load_font('Arial.ttf', 48)
+    value_font = load_font('ArialBlack.ttf', 120)
+    unit_font = load_font('Arial.ttf', 40)
+    bar_font = load_font('Arial.ttf', 28)
 
-    # TOP-ALIGNED layout (no vertical centering)
-    # "Bezug" label
+    # --- HEADLINE: top-left ---
     label_text = "Bezug"
-    label_bbox = draw.textbbox((0, 0), label_text, font=label_font)
-    label_width = label_bbox[2] - label_bbox[0]
-    label_x = (1000 - label_width) // 2  # Center horizontally
-    label_y = 30
-    draw.text((label_x, label_y), label_text, fill=0, font=label_font)
+    draw.text((MARGIN, MARGIN), label_text, fill=0, font=label_font)
+    label_bbox = draw.textbbox((MARGIN, MARGIN), label_text, font=label_font)
+    label_bottom = label_bbox[3]
 
-    # Measure label to position value below
-    label_measured = draw.textbbox((label_x, label_y), label_text, font=label_font)
-    label_bottom = label_measured[3]
-
-    # Main kWh value (extra large) - positioned below label
+    # --- VALUE+BAR GROUP: vertically centered between headline and bottom ---
     value_text = f"{data.purchased:.1f}"
-    value_bbox = draw.textbbox((0, 0), value_text, font=value_font)
-    value_width = value_bbox[2] - value_bbox[0]
-    value_height = value_bbox[3] - value_bbox[1]
-    value_y = label_bottom + 20
+    value_measure = draw.textbbox((0, 0), value_text, font=value_font)
+    value_h = value_measure[3]
 
-    # "kWh" unit text to the right, baseline-aligned
+    bar_h = 30
+    gap_value_bar = 20
+    gap_bar_label = 5
+    bar_label_text = "Anteil Verbrauch 100%"
+    bar_label_measure = draw.textbbox((0, 0), bar_label_text, font=bar_font)
+    bar_label_h = bar_label_measure[3]
+
+    group_h = value_h + gap_value_bar + bar_h + gap_bar_label + bar_label_h
+    available_top = label_bottom
+    available_bottom = CANVAS_H - MARGIN - 130  # same as breakdown_y_start on other screens
+    value_y = available_top + (available_bottom - available_top - group_h) // 2
+
+    draw.text((MARGIN, value_y), value_text, fill=0, font=value_font)
+    value_actual = draw.textbbox((MARGIN, value_y), value_text, font=value_font)
+
     unit_text = "kWh"
-    unit_bbox = draw.textbbox((0, 0), unit_text, font=unit_font)
-    unit_width = unit_bbox[2] - unit_bbox[0]
-    unit_height = unit_bbox[3] - unit_bbox[1]
-
-    # Center the value+unit combo
-    total_width = value_width + 20 + unit_width
-    value_x = (1000 - total_width) // 2
-    unit_x = value_x + value_width + 20
-    unit_y = value_y + value_height - unit_height
-
-    draw.text((value_x, value_y), value_text, fill=0, font=value_font)
+    unit_x = value_actual[2] + 20
+    unit_actual = draw.textbbox((unit_x, value_y), unit_text, font=unit_font)
+    unit_y = value_actual[3] - (unit_actual[3] - unit_actual[1])
     draw.text((unit_x, unit_y), unit_text, fill=0, font=unit_font)
 
-    # Horizontal bar - positioned below value with room for label above bar
-    value_bottom = value_y + value_height
-    bar_label_y = value_bottom + 40  # Space for bar label text above bar
-    bar_y = bar_label_y + 5  # Small gap between label and bar top
-    bar_bbox = (100, bar_y, 850, bar_y + 40)
+    bar_y = value_y + value_h + gap_value_bar
+    bar_bbox = (MARGIN, bar_y, CANVAS_W - MARGIN, bar_y + bar_h)
     percentage = min(100.0, (data.purchased / data.consumption) * 100.0) if data.consumption > 0 else 0.0
     draw_horizontal_bar(draw, bar_bbox, percentage, bar_font, label="Anteil Verbrauch")
 

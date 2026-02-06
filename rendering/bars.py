@@ -22,18 +22,6 @@ def draw_horizontal_bar(draw: ImageDraw.Draw, bbox: tuple, percentage: float, fo
     """
     x0, y0, x1, y1 = bbox
 
-    # Draw percentage text ABOVE the bar (left-aligned at bar x0)
-    if label:
-        percentage_text = f"{label} {int(percentage)}%"
-    else:
-        percentage_text = f"{int(percentage)}%"
-
-    # Position text above bar with small gap
-    text_bbox = draw.textbbox((x0, 0), percentage_text, font=font)
-    text_height = text_bbox[3] - text_bbox[1]
-    text_y = y0 - text_height - 5  # 5px gap above bar
-    draw.text((x0, text_y), percentage_text, fill=0, font=font)
-
     # Draw outline rectangle
     draw.rectangle(bbox, outline=0, width=4)
 
@@ -48,3 +36,12 @@ def draw_horizontal_bar(draw: ImageDraw.Draw, bbox: tuple, percentage: float, fo
     if fill_width > 0:
         fill_bbox = [x0, y0, x0 + fill_width, y1]
         draw.rectangle(fill_bbox, fill=0)
+
+    # Draw percentage text BELOW the bar (left-aligned at bar x0)
+    if label:
+        percentage_text = f"{label} {int(percentage)}%"
+    else:
+        percentage_text = f"{int(percentage)}%"
+
+    text_y = y1 + 5  # 5px gap below bar
+    draw.text((x0, text_y), percentage_text, fill=0, font=font)
