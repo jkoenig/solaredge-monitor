@@ -32,7 +32,10 @@ Show the homeowner their solar energy state at a glance — production, consumpt
 
 ### Active
 
-(None — next milestone requirements TBD)
+- [ ] Forecast.Solar API integration (today + tomorrow production forecast)
+- [ ] "Prognose, heute" display screen with actual vs forecast progress bar and tomorrow's forecast
+- [ ] Forecast configuration via .env (lat, lon, tilt, azimuth, kWp)
+- [ ] Hourly forecast caching (Forecast.Solar free tier: 12 req/hour)
 
 ### Out of Scope
 
@@ -42,11 +45,20 @@ Show the homeowner their solar energy state at a glance — production, consumpt
 - Multiple SolarEdge sites — single site monitor
 - Notifications or alerts — display-only
 
+## Current Milestone: v1.1 Forecast Screen
+
+**Goal:** Add solar production forecast screen using Forecast.Solar API
+
+**Target features:**
+- Forecast.Solar API client with hourly caching
+- "Prognose, heute" screen: today's forecast (kWh) with actual-vs-forecast progress bar + tomorrow's forecast
+- .env configuration for installation parameters (lat, lon, tilt, azimuth, kWp)
+
 ## Context
 
-Shipped v1 with 1,736 lines of Python across 17 modules. Tech stack: Python 3.9+, Pillow, requests, python-dotenv, python-json-logger, Waveshare e-ink driver. Deployed on Raspberry Pi Zero WH (1 GHz, 512 MB) via systemd.
+Shipped v1 with 1,736 lines of Python across 17 modules, extended post-v1 with battery screen (auto-detected), 14-day history histograms, and improved German labels (7 screens total). Tech stack: Python 3.9+, Pillow, requests, python-dotenv, python-json-logger, Waveshare e-ink driver. Deployed on Raspberry Pi Zero WH (1 GHz, 512 MB) via systemd.
 
-Known tech debt: PowerFlow data fetched but not displayed (reserved for v2), SiteOverview API method implemented but unused (reserved for v2).
+Known tech debt: PowerFlow data fetched but not displayed (reserved for future), SiteOverview API method implemented but unused (reserved for future).
 
 ## Constraints
 
@@ -76,4 +88,4 @@ Known tech debt: PowerFlow data fetched but not displayed (reserved for v2), Sit
 | German screen labels | User's native language for at-a-glance reading | ✓ Good |
 
 ---
-*Last updated: 2026-02-06 after v1 milestone*
+*Last updated: 2026-02-07 after v1.1 milestone start*

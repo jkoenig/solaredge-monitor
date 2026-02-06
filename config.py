@@ -13,6 +13,7 @@ Usage:
 """
 
 from dataclasses import dataclass
+from typing import Optional
 import os
 import logging
 
@@ -45,6 +46,13 @@ class Config:
     sleep_end_hour: int = 6
     debug: bool = False
     log_level: str = "INFO"
+
+    # Optional forecast configuration (all 5 must be present to enable forecast screen)
+    forecast_lat: Optional[float] = None
+    forecast_lon: Optional[float] = None
+    forecast_tilt: Optional[int] = None
+    forecast_azimuth: Optional[int] = None
+    forecast_kwp: Optional[float] = None
 
     def __post_init__(self):
         """Load values from environment variables and validate.
@@ -111,6 +119,13 @@ class Config:
             error_msg = "ERROR: Configuration validation failed:\n" + "\n".join(errors)
             raise ValueError(error_msg)
 
+        # Optional forecast configuration (all 5 must be present to enable forecast screen)
+        self.forecast_lat = self._load_optional_float("FORECAST_LAT")
+        self.forecast_lon = self._load_optional_float("FORECAST_LON")
+        self.forecast_tilt = self._load_optional_int("FORECAST_TILT", min_val=0, max_val=90)
+        self.forecast_azimuth = self._load_optional_int("FORECAST_AZIMUTH", min_val=-180, max_val=180)
+        self.forecast_kwp = self._load_optional_float("FORECAST_KWP")
+
     def log_startup(self):
         """Log configuration at startup with secrets masked.
 
@@ -129,3 +144,50 @@ class Config:
         logging.info(f"  SOLAREDGE_SLEEP_END: {self.sleep_end_hour}:00")
         logging.info(f"  SOLAREDGE_DEBUG: {self.debug}")
         logging.info(f"  SOLAREDGE_LOG_LEVEL: {self.log_level}")
+
+        # Log forecast configuration status
+        if self.has_forecast_config():
+            logging.info(f"  Forecast: enabled (lat={self.forecast_lat}, lon={self.forecast_lon}, tilt={self.forecast_tilt}, azimuth={self.forecast_azimuth}, kwp={self.forecast_kwp})")
+        else:
+            logging.info("  Forecast: disabled (incomplete configuration)")
+
+    @staticmethod
+    def _load_optional_float(key: str) -> Optional[float]:
+        """Load optional float from environment, return None if missing or invalid."""
+        value = os.environ.get(key)
+        if value is None or value.strip() == "":
+            return None
+        try:
+            return float(value)
+        except ValueError:
+            logging.warning(f"{key}: Invalid float value '{value}', ignoring")
+            return None
+
+    @staticmethod
+    def _load_optional_int(key: str, min_val: int = None, max_val: int = None) -> Optional[int]:
+        """Load optional int from environment with range validation."""
+        value = os.environ.get(key)
+        if value is None or value.strip() == "":
+            return None
+        try:
+            val = int(value)
+            if min_val is not None and val < min_val:
+                logging.warning(f"{key}: Value {val} below minimum {min_val}, ignoring")
+                return None
+            if max_val is not None and val > max_val:
+                logging.warning(f"{key}: Value {val} above maximum {max_val}, ignoring")
+                return None
+            return val
+        except ValueError:
+            logging.warning(f"{key}: Invalid integer value '{value}', ignoring")
+            return None
+
+    def has_forecast_config(self) -> bool:
+        """Return True if all 5 forecast parameters are configured."""
+        return all([
+            self.forecast_lat is not None,
+            self.forecast_lon is not None,
+            self.forecast_tilt is not None,
+            self.forecast_azimuth is not None,
+            self.forecast_kwp is not None,
+        ])
