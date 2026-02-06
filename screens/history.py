@@ -25,8 +25,8 @@ def _render_history(data: EnergyHistory, values: list, label: str) -> Image:
     """Render a 14-day histogram screen.
 
     Layout:
-        Headline "Letzte 2 Wochen" (Arial 60) at top
-        Sub-label with label left + "max: X.X kWh" right (Arial 44)
+        Headline with label (Arial 60) at top
+        Sub-label "Letzte 2 Wochen" left + "max: X.X kWh" right (Arial 44)
         14 vertical bars proportional to max value
         Date labels (DD) below bars (Arial 36)
     """
@@ -38,23 +38,23 @@ def _render_history(data: EnergyHistory, values: list, label: str) -> Image:
     date_font = load_font('Arial.ttf', 36)
 
     # --- HEADLINE ---
-    headline = "Letzte 2 Wochen"
-    draw.text((MARGIN, MARGIN), headline, fill=0, font=headline_font)
-    headline_bbox = draw.textbbox((MARGIN, MARGIN), headline, font=headline_font)
+    draw.text((MARGIN, MARGIN), label, fill=0, font=headline_font)
+    headline_bbox = draw.textbbox((MARGIN, MARGIN), label, font=headline_font)
     headline_bottom = headline_bbox[3]
 
     # --- SUB-LABEL ---
     sub_y = headline_bottom + 8
     max_val = max(values) if values else 0.0
     max_text = f"max: {max_val:.1f} kWh"
+    sub_label = "Letzte 2 Wochen"
 
-    draw.text((MARGIN, sub_y), label, fill=0, font=sub_font)
+    draw.text((MARGIN, sub_y), sub_label, fill=0, font=sub_font)
 
     max_bbox = draw.textbbox((0, 0), max_text, font=sub_font)
     max_text_w = max_bbox[2] - max_bbox[0]
     draw.text((CANVAS_W - MARGIN - max_text_w, sub_y), max_text, fill=0, font=sub_font)
 
-    sub_bbox = draw.textbbox((MARGIN, sub_y), label, font=sub_font)
+    sub_bbox = draw.textbbox((MARGIN, sub_y), sub_label, font=sub_font)
     sub_bottom = sub_bbox[3]
 
     # --- DATE LABELS (bottom) ---

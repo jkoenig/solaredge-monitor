@@ -39,7 +39,7 @@ def render_production_screen(data: EnergyDetails) -> Image:
     bar_font = load_font('Arial.ttf', 56)
 
     # --- HEADLINE: top-left ---
-    label_text = "Produktion"
+    label_text = "Produktion, heute"
     draw.text((MARGIN, MARGIN), label_text, fill=0, font=label_font)
     label_bbox = draw.textbbox((MARGIN, MARGIN), label_text, font=label_font)
     label_bottom = label_bbox[3]

@@ -9,8 +9,8 @@ The display cycles through up to 7 screens, each showing a daily energy metric w
 | Produktion | Verbrauch |
 |:---:|:---:|
 | ![Produktion](docs/screen-produktion.png) | ![Verbrauch](docs/screen-verbrauch.png) |
-| **Einspeisung** | **Bezug** |
-| ![Einspeisung](docs/screen-einspeisung.png) | ![Bezug](docs/screen-bezug.png) |
+| **Einspeisung** | **Netzbezug** |
+| ![Einspeisung](docs/screen-einspeisung.png) | ![Netzbezug](docs/screen-bezug.png) |
 | **Hausakku (Laden)** | **Hausakku (Entladen)** |
 | ![Hausakku Laden](docs/screen-hausakku-charging.png) | ![Hausakku Entladen](docs/screen-hausakku-discharging.png) |
 | **Verlauf Produktion** | **Verlauf Verbrauch** |
