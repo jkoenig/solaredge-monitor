@@ -39,7 +39,7 @@ def render_consumption_screen(data: EnergyDetails) -> Image:
     bar_font = load_font('Arial.ttf', 56)
 
     # --- HEADLINE: top-left ---
-    label_text = "Verbrauch"
+    label_text = "Verbrauch, heute"
     draw.text((MARGIN, MARGIN), label_text, fill=0, font=label_font)
     label_bbox = draw.textbbox((MARGIN, MARGIN), label_text, font=label_font)
     label_bottom = label_bbox[3]
@@ -56,7 +56,7 @@ def render_consumption_screen(data: EnergyDetails) -> Image:
     bar_h = 40
     gap_value_bar = 20
     gap_bar_label = 5
-    bar_label_text = "Solaranteil 100%"
+    bar_label_text = "Davon 100% von PV-Anlage"
     bar_label_measure = draw.textbbox((0, 0), bar_label_text, font=bar_font)
     bar_label_h = bar_label_measure[3]
 
@@ -77,7 +77,7 @@ def render_consumption_screen(data: EnergyDetails) -> Image:
     bar_y = value_y + value_h + gap_value_bar
     bar_bbox = (MARGIN, bar_y, CANVAS_W - MARGIN, bar_y + bar_h)
     percentage = min(100.0, (data.self_consumption / data.consumption) * 100.0) if data.consumption > 0 else 0.0
-    draw_horizontal_bar(draw, bar_bbox, percentage, bar_font, label="Solaranteil")
+    draw_horizontal_bar(draw, bar_bbox, percentage, bar_font, legend=f"Davon {int(percentage)}% von PV-Anlage")
 
     content_width = CANVAS_W - 2 * MARGIN
     column_width = content_width // 3

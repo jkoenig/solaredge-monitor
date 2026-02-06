@@ -8,17 +8,17 @@ with percentage text displayed to the right of the bar.
 from PIL import ImageDraw
 
 
-def draw_horizontal_bar(draw: ImageDraw.Draw, bbox: tuple, percentage: float, font, label: str = "") -> None:
+def draw_horizontal_bar(draw: ImageDraw.Draw, bbox: tuple, percentage: float, font, label: str = "", legend: str = "") -> None:
     """
     Draw a horizontal bar chart with percentage fill and text label.
-    Label text is positioned ABOVE the bar to avoid right-edge truncation.
 
     Args:
         draw: PIL ImageDraw instance
         bbox: Tuple of (x0, y0, x1, y1) defining bar bounds
         percentage: Fill percentage (0-100)
         font: PIL font object for percentage text
-        label: Optional label to prefix before percentage (e.g., "Eigenverbrauch")
+        label: Optional label to prefix before percentage (e.g., "Eigenverbrauch" → "Eigenverbrauch 75%")
+        legend: Optional pre-formatted legend text (overrides label if provided)
     """
     x0, y0, x1, y1 = bbox
 
@@ -37,8 +37,10 @@ def draw_horizontal_bar(draw: ImageDraw.Draw, bbox: tuple, percentage: float, fo
         fill_bbox = [x0, y0, x0 + fill_width, y1]
         draw.rectangle(fill_bbox, fill=0)
 
-    # Draw percentage text BELOW the bar (left-aligned at bar x0)
-    if label:
+    # Draw legend text BELOW the bar (left-aligned at bar x0)
+    if legend:
+        percentage_text = legend
+    elif label:
         percentage_text = f"{label} {int(percentage)}%"
     else:
         percentage_text = f"{int(percentage)}%"
