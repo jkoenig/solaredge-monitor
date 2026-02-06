@@ -123,9 +123,11 @@ Plans:
   4. Application handles SIGTERM/SIGINT gracefully (clears display state before exit)
   5. Dependencies managed via requirements.txt with pinned versions
 
-**Plans**: TBD
+**Plans:** 2 plans
 
-Plans: *(to be defined during planning)*
+Plans:
+- [ ] 05-01-PLAN.md -- Logging setup, config extensions, error screen renderer
+- [ ] 05-02-PLAN.md -- Production polling loop with screen cycling, sleep mode, and graceful shutdown
 
 ---
 
@@ -158,7 +160,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 2. Configuration Foundation | 1/1 | Complete | 2026-02-06 |
 | 3. Architecture & Data Layer | 3/3 | Complete | 2026-02-06 |
 | 4. Display Layer | 3/3 | Complete | 2026-02-06 |
-| 5. Operations | 0/TBD | Not started | - |
+| 5. Operations | 0/2 | Not started | - |
 | 6. Deployment | 0/TBD | Not started | - |
 
 ---
