@@ -4,6 +4,7 @@ from screens.feed_in import render_feed_in_screen
 from screens.purchased import render_purchased_screen
 from screens.battery import render_battery_screen
 from screens.history import render_history_production_screen, render_history_consumption_screen
+from screens.forecast import render_forecast_screen
 
 # Legacy screen list (energy screens only)
 SCREENS = [
@@ -12,19 +13,6 @@ SCREENS = [
     render_feed_in_screen,
     render_purchased_screen,
 ]
-
-
-def _placeholder_forecast_screen(data):
-    """Placeholder for forecast screen (implemented in Phase 8)."""
-    from PIL import Image, ImageDraw
-    from rendering.fonts import load_font
-    img = Image.new('1', (1000, 488), 1)
-    draw = ImageDraw.Draw(img)
-    font = load_font('Arial.ttf', 60)
-    draw.text((5, 5), "Prognose", fill=0, font=font)
-    draw.text((5, 80), f"{data.today_kwh:.1f} kWh heute", fill=0, font=load_font('Arial.ttf', 48))
-    draw.text((5, 140), f"{data.tomorrow_kwh:.1f} kWh morgen", fill=0, font=load_font('Arial.ttf', 48))
-    return img
 
 
 def get_screens(has_battery=False, has_forecast_config=False):
@@ -50,7 +38,7 @@ def get_screens(has_battery=False, has_forecast_config=False):
     if has_battery:
         screens.append((render_battery_screen, "battery", "Hausakku"))
     if has_forecast_config:
-        screens.append((_placeholder_forecast_screen, "forecast", "Prognose"))
+        screens.append((render_forecast_screen, "forecast", "Prognose"))
     screens.append((render_history_production_screen, "history", "Verlauf Produktion"))
     screens.append((render_history_consumption_screen, "history", "Verlauf Verbrauch"))
     return screens
