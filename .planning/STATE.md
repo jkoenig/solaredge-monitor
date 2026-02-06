@@ -6,23 +6,23 @@ See: .planning/PROJECT.md (updated 2026-02-07)
 
 **Core value:** Show the homeowner their solar energy state at a glance on a physical e-ink display that's always up to date.
 
-**Current focus:** v1.1 Forecast Screen - Phase 7: Forecast API Integration
+**Current focus:** v1.1 Forecast Screen - Phase 8: Forecast Screen
 
 ## Current Position
 
-Phase: 7 of 9 (Forecast API Integration)
-Plan: 1 of 3 in current phase
-Status: In progress
-Last activity: 2026-02-06 - Completed 07-01-PLAN.md (config foundation)
+Phase: 7 of 9 (Forecast API Integration) — COMPLETE
+Plan: 2 of 2 in current phase
+Status: Phase complete, verified ✓
+Last activity: 2026-02-07 - Phase 7 complete (all 5/5 must-haves verified)
 
-Progress: [████████░░] 87% (14/16 estimated total plans)
+Progress: [█████████░] 93% (15/16 estimated total plans)
 
 ## Performance Metrics
 
 **Current velocity:**
-- Total plans completed: 14
-- Average duration: 1.8 minutes
-- Total execution time: 0.45 hours (27 minutes)
+- Total plans completed: 15
+- Average duration: 1.9 minutes
+- Total execution time: 0.48 hours (29 minutes)
 
 **Baseline established:** v1.0 MVP shipped with consistent 1-2 minute plan execution. v1.1 maintaining velocity.
 
@@ -40,6 +40,10 @@ Recent decisions affecting v1.1:
 - All 5 forecast parameters required to enable feature - atomic activation (07-01)
 - Invalid forecast values logged as warnings, set to None - graceful degradation (07-01)
 - Range validation for tilt (0-90) and azimuth (-180 to 180) catches common errors (07-01)
+- TTL cache caches None results to prevent hammering when rate-limited (07-02)
+- Simple requests.get() without session/retry - cache is the retry strategy (07-02)
+- Placeholder forecast screen for Phase 7, real screen design in Phase 8 (07-02)
+- Forecast appears after battery but before history in screen rotation (07-02)
 
 ### Pending Todos
 
@@ -51,10 +55,10 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-06T23:21:04Z
-Stopped at: Completed 07-01-PLAN.md (config foundation)
+Last session: 2026-02-07
+Stopped at: Phase 7 complete, ready for Phase 8 planning
 Resume file: None
 
 ---
 
-*Last updated: 2026-02-06*
+*Last updated: 2026-02-07*
