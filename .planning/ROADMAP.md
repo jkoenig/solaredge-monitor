@@ -13,7 +13,7 @@ Transform a 828-line monolithic script into a clean, modular Python application.
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Cleanup & Fresh Repository** - Remove non-solar integrations and create clean git history
-- [ ] **Phase 2: Configuration Foundation** - Environment-based configuration with validation
+- [x] **Phase 2: Configuration Foundation** - Environment-based configuration with validation
 - [ ] **Phase 3: Architecture & Data Layer** - Modular structure with SolarEdge API clients
 - [ ] **Phase 4: Display Layer** - Separate rendering with improved fonts and debug mode
 - [ ] **Phase 5: Operations** - Polling loop, logging, and graceful shutdown
@@ -59,7 +59,7 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 02-01-PLAN.md -- Config dataclass with env loading, validation, .env.example, and requirements.txt
+- [x] 02-01-PLAN.md -- Config dataclass with env loading, validation, .env.example, and requirements.txt
 
 ---
 
@@ -149,7 +149,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Cleanup & Fresh Repository | 2/2 | ✓ Complete | 2026-02-05 |
-| 2. Configuration Foundation | 0/1 | Not started | - |
+| 2. Configuration Foundation | 1/1 | ✓ Complete | 2026-02-06 |
 | 3. Architecture & Data Layer | 0/TBD | Not started | - |
 | 4. Display Layer | 0/TBD | Not started | - |
 | 5. Operations | 0/TBD | Not started | - |
@@ -157,4 +157,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 ---
 
-*Last updated: 2026-02-05*
+*Last updated: 2026-02-06*
