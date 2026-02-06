@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Configuration Foundation** - Environment-based configuration with validation
 - [x] **Phase 3: Architecture & Data Layer** - Modular structure with SolarEdge API clients
 - [x] **Phase 4: Display Layer** - Separate rendering with improved fonts and debug mode
-- [ ] **Phase 5: Operations** - Polling loop, logging, and graceful shutdown
+- [x] **Phase 5: Operations** - Polling loop, logging, and graceful shutdown
 - [ ] **Phase 6: Deployment** - Git pull deployment with systemd service
 
 ## Phase Details
@@ -126,8 +126,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 05-01-PLAN.md -- Logging setup, config extensions, error screen renderer
-- [ ] 05-02-PLAN.md -- Production polling loop with screen cycling, sleep mode, and graceful shutdown
+- [x] 05-01-PLAN.md -- Logging setup, config extensions, error screen renderer
+- [x] 05-02-PLAN.md -- Production polling loop with screen cycling, sleep mode, and graceful shutdown
 
 ---
 
@@ -160,7 +160,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 2. Configuration Foundation | 1/1 | Complete | 2026-02-06 |
 | 3. Architecture & Data Layer | 3/3 | Complete | 2026-02-06 |
 | 4. Display Layer | 3/3 | Complete | 2026-02-06 |
-| 5. Operations | 0/2 | Not started | - |
+| 5. Operations | 2/2 | Complete | 2026-02-06 |
 | 6. Deployment | 0/TBD | Not started | - |
 
 ---

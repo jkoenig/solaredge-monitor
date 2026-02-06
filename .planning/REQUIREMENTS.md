@@ -38,19 +38,19 @@
 
 ### Display (DISP)
 
-- [ ] **DISP-01**: Display rendering separated from data fetching — display functions receive data models, not raw API responses
-- [ ] **DISP-02**: Screen cycling through focused display screens (number and content TBD — to be refined after SolarEdge panel review)
-- [ ] **DISP-03**: Improved font sizes for readability on 250x122 display (minimum 14px labels, 24px+ data)
-- [ ] **DISP-04**: Debug mode outputs PNG files for development without hardware
-- [ ] **DISP-05**: 4x supersampling maintained (render at 1000x488, scale to 250x122)
+- [x] **DISP-01**: Display rendering separated from data fetching — display functions receive data models, not raw API responses
+- [x] **DISP-02**: Screen cycling through focused display screens (number and content TBD — to be refined after SolarEdge panel review)
+- [x] **DISP-03**: Improved font sizes for readability on 250x122 display (minimum 14px labels, 24px+ data)
+- [x] **DISP-04**: Debug mode outputs PNG files for development without hardware
+- [x] **DISP-05**: 4x supersampling maintained (render at 1000x488, scale to 250x122)
 
 ### Operations (OPS)
 
-- [ ] **OPS-01**: 5-minute polling interval (configurable via environment variable)
-- [ ] **OPS-02**: Time-gated operation — sleep between midnight and 6 AM
-- [ ] **OPS-03**: Structured logging with appropriate log levels (INFO for normal operation, DEBUG for development)
-- [ ] **OPS-04**: Graceful shutdown on SIGTERM/SIGINT (clean display state)
-- [ ] **OPS-05**: Proper dependency management via requirements.txt or pyproject.toml with pinned versions
+- [x] **OPS-01**: 5-minute polling interval (configurable via environment variable)
+- [x] **OPS-02**: Time-gated operation — sleep between midnight and 6 AM
+- [x] **OPS-03**: Structured logging with appropriate log levels (INFO for normal operation, DEBUG for development)
+- [x] **OPS-04**: Graceful shutdown on SIGTERM/SIGINT (clean display state)
+- [x] **OPS-05**: Proper dependency management via requirements.txt or pyproject.toml with pinned versions
 
 ### Deployment (DEP)
 
@@ -103,16 +103,16 @@
 | DATA-03 | Phase 3 | Complete |
 | DATA-04 | Phase 3 | Complete |
 | DATA-05 | Phase 3 | Complete |
-| DISP-01 | Phase 4 | Pending |
-| DISP-02 | Phase 4 | Pending |
-| DISP-03 | Phase 4 | Pending |
-| DISP-04 | Phase 4 | Pending |
-| DISP-05 | Phase 4 | Pending |
-| OPS-01 | Phase 5 | Pending |
-| OPS-02 | Phase 5 | Pending |
-| OPS-03 | Phase 5 | Pending |
-| OPS-04 | Phase 5 | Pending |
-| OPS-05 | Phase 5 | Pending |
+| DISP-01 | Phase 4 | Complete |
+| DISP-02 | Phase 4 | Complete |
+| DISP-03 | Phase 4 | Complete |
+| DISP-04 | Phase 4 | Complete |
+| DISP-05 | Phase 4 | Complete |
+| OPS-01 | Phase 5 | Complete |
+| OPS-02 | Phase 5 | Complete |
+| OPS-03 | Phase 5 | Complete |
+| OPS-04 | Phase 5 | Complete |
+| OPS-05 | Phase 5 | Complete |
 | DEP-01 | Phase 6 | Pending |
 | DEP-02 | Phase 6 | Pending |
 | DEP-03 | Phase 6 | Pending |
