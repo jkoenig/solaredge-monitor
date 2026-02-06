@@ -46,19 +46,21 @@ def draw_house_icon(draw: ImageDraw.Draw, x: int, y: int, size: int) -> None:
         y: Top coordinate of icon bounding box
         size: Width and height of icon bounding box
     """
-    # Triangle roof (top 38% of size, leaving gap before body)
-    roof_height = int(size * 0.38)
+    # Rectangle body (bottom 60% of size)
+    roof_height = int(size * 0.4)
+    body_x0 = x + size // 6
+    body_x1 = x + size - size // 6
+    body_y = y + roof_height - 3  # overlap with roof bottom for solid connection
+    body_bbox = [body_x0, body_y, body_x1, y + size]
+    draw.rectangle(body_bbox, outline=0, width=6)
+
+    # Triangle roof drawn on top so it visually connects
     roof_points = [
-        (x + size // 2, y),  # Top center
-        (x, y + roof_height),  # Bottom left
-        (x + size, y + roof_height),  # Bottom right
+        (x + size // 2, y),           # Peak
+        (x, y + roof_height),         # Bottom left (overhangs body)
+        (x + size, y + roof_height),  # Bottom right (overhangs body)
     ]
     draw.polygon(roof_points, outline=0, width=6)
-
-    # Rectangle body (offset down by 5px to create gap from roof)
-    body_y = y + roof_height + 5
-    body_bbox = [x + size // 6, body_y, x + size - size // 6, y + size]
-    draw.rectangle(body_bbox, outline=0, width=6)
 
 
 def draw_grid_icon(draw: ImageDraw.Draw, x: int, y: int, size: int) -> None:
