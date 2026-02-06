@@ -58,11 +58,11 @@ def render_consumption_screen(data: EnergyDetails) -> Image:
     unit_y = value_y + value_height - unit_height
     draw.text((unit_x, unit_y), unit_text, fill=0, font=unit_font)
 
-    # Horizontal bar showing percentage (consumption / 15.0 * 100, capped at 100%)
-    bar_y = value_y + value_height + 30
+    # Horizontal bar showing Solaranteil (self_consumption / consumption * 100)
+    bar_y = value_y + value_height + 60
     bar_bbox = (30, bar_y, 850, bar_y + 40)
-    percentage = min(100.0, (data.consumption / 15.0) * 100.0)
-    draw_horizontal_bar(draw, bar_bbox, percentage, bar_font)
+    percentage = min(100.0, (data.self_consumption / data.consumption) * 100.0) if data.consumption > 0 else 0.0
+    draw_horizontal_bar(draw, bar_bbox, percentage, bar_font, label="Solaranteil")
 
     # BOTTOM SECTION: 3-column breakdown showing sources of consumption
     breakdown_y_start = bar_y + 80
@@ -72,12 +72,12 @@ def render_consumption_screen(data: EnergyDetails) -> Image:
     # Calculate battery energy: consumption - self_consumption - purchased
     battery_energy = max(0.0, data.consumption - data.self_consumption - data.purchased)
 
-    # Column 1: Sun icon + "Solar" + self_consumption value
+    # Column 1: Sun icon + "Aus Solaranlage" + self_consumption value
     col1_x = column_width // 2
     icon_x1 = col1_x - icon_size // 2
     draw_sun_icon(draw, icon_x1, breakdown_y_start, icon_size)
 
-    label1 = "Solar"
+    label1 = "Aus Solaranlage"
     label1_bbox = draw.textbbox((0, 0), label1, font=breakdown_label_font)
     label1_width = label1_bbox[2] - label1_bbox[0]
     label1_x = col1_x - label1_width // 2
@@ -91,12 +91,12 @@ def render_consumption_screen(data: EnergyDetails) -> Image:
     value1_y = label1_y + 45
     draw.text((value1_x, value1_y), value1, fill=0, font=breakdown_value_font)
 
-    # Column 2: Battery icon + "Batterie" + battery energy
+    # Column 2: Battery icon + "Von Batterie" + battery energy
     col2_x = column_width + column_width // 2
     icon_x2 = col2_x - icon_size // 2
     draw_battery_icon(draw, icon_x2, breakdown_y_start, icon_size)
 
-    label2 = "Batterie"
+    label2 = "Von Batterie"
     label2_bbox = draw.textbbox((0, 0), label2, font=breakdown_label_font)
     label2_width = label2_bbox[2] - label2_bbox[0]
     label2_x = col2_x - label2_width // 2
@@ -110,12 +110,12 @@ def render_consumption_screen(data: EnergyDetails) -> Image:
     value2_y = label2_y + 45
     draw.text((value2_x, value2_y), value2, fill=0, font=breakdown_value_font)
 
-    # Column 3: Grid icon + "Netz" + purchased value
+    # Column 3: Grid icon + "Vom Netz" + purchased value
     col3_x = 2 * column_width + column_width // 2
     icon_x3 = col3_x - icon_size // 2
     draw_grid_icon(draw, icon_x3, breakdown_y_start, icon_size)
 
-    label3 = "Netz"
+    label3 = "Vom Netz"
     label3_bbox = draw.textbbox((0, 0), label3, font=breakdown_label_font)
     label3_width = label3_bbox[2] - label3_bbox[0]
     label3_x = col3_x - label3_width // 2

@@ -11,7 +11,7 @@ from PIL import ImageDraw
 
 def draw_battery_icon(draw: ImageDraw.Draw, x: int, y: int, size: int) -> None:
     """
-    Draw a battery icon: rectangle body with small terminal on top.
+    Draw a battery icon: tall vertical rectangle body with small terminal on top.
 
     Args:
         draw: PIL ImageDraw instance
@@ -19,16 +19,18 @@ def draw_battery_icon(draw: ImageDraw.Draw, x: int, y: int, size: int) -> None:
         y: Top coordinate of icon bounding box
         size: Width and height of icon bounding box
     """
-    # Main battery body (80% of height, centered)
-    body_height = int(size * 0.8)
-    body_y = y + (size - body_height) // 2
-    body_bbox = [x, body_y, x + size, body_y + body_height]
+    # Main battery body (tall vertical rectangle: 55% width, 90% height)
+    body_width = int(size * 0.55)
+    body_height = int(size * 0.9)
+    body_x = x + (size - body_width) // 2
+    body_y = y + (size - body_height)
+    body_bbox = [body_x, body_y, body_x + body_width, body_y + body_height]
     draw.rectangle(body_bbox, outline=0, width=6)
 
-    # Battery terminal (small rectangle on top, centered, 20% width)
-    terminal_width = int(size * 0.2)
-    terminal_height = int(size * 0.1)
-    terminal_x = x + (size - terminal_width) // 2
+    # Battery terminal (small rectangle on top, centered, 25% of body width)
+    terminal_width = int(body_width * 0.25)
+    terminal_height = int(size * 0.08)
+    terminal_x = body_x + (body_width - terminal_width) // 2
     terminal_y = y
     terminal_bbox = [terminal_x, terminal_y, terminal_x + terminal_width, terminal_y + terminal_height]
     draw.rectangle(terminal_bbox, fill=0)
@@ -61,7 +63,7 @@ def draw_house_icon(draw: ImageDraw.Draw, x: int, y: int, size: int) -> None:
 
 def draw_grid_icon(draw: ImageDraw.Draw, x: int, y: int, size: int) -> None:
     """
-    Draw a grid icon: 4 vertical + 4 horizontal lines.
+    Draw a power pylon icon: transmission tower silhouette.
 
     Args:
         draw: PIL ImageDraw instance
@@ -69,15 +71,41 @@ def draw_grid_icon(draw: ImageDraw.Draw, x: int, y: int, size: int) -> None:
         y: Top coordinate of icon bounding box
         size: Width and height of icon bounding box
     """
-    # 4 vertical lines evenly spaced
-    for i in range(4):
-        line_x = x + int(i * size / 3)
-        draw.line([(line_x, y), (line_x, y + size)], fill=0, width=4)
+    center_x = x + size // 2
 
-    # 4 horizontal lines evenly spaced
-    for i in range(4):
-        line_y = y + int(i * size / 3)
-        draw.line([(x, line_y), (x + size, line_y)], fill=0, width=4)
+    # Bottom legs (angled outward)
+    bottom_width = int(size * 0.9)
+    leg_bottom_left = x + (size - bottom_width) // 2
+    leg_bottom_right = leg_bottom_left + bottom_width
+
+    # Waist (narrow middle)
+    waist_y = y + int(size * 0.6)
+    waist_width = int(size * 0.25)
+    waist_left = center_x - waist_width // 2
+    waist_right = center_x + waist_width // 2
+
+    # Top (wider top section)
+    top_y = y + int(size * 0.2)
+    top_width = int(size * 0.6)
+    top_left = center_x - top_width // 2
+    top_right = center_x + top_width // 2
+
+    # Draw pylon body as polygon
+    pylon_points = [
+        (leg_bottom_left, y + size),  # Bottom left leg
+        (waist_left, waist_y),        # Left side of waist
+        (top_left, top_y),            # Left side of top
+        (top_right, top_y),           # Right side of top
+        (waist_right, waist_y),       # Right side of waist
+        (leg_bottom_right, y + size), # Bottom right leg
+    ]
+    draw.polygon(pylon_points, outline=0, width=5)
+
+    # Draw crossarm at top (horizontal line)
+    crossarm_y = y + int(size * 0.15)
+    crossarm_left = x + int(size * 0.1)
+    crossarm_right = x + int(size * 0.9)
+    draw.line([(crossarm_left, crossarm_y), (crossarm_right, crossarm_y)], fill=0, width=5)
 
 
 def draw_sun_icon(draw: ImageDraw.Draw, x: int, y: int, size: int) -> None:
