@@ -100,9 +100,12 @@ Plans:
   4. Debug mode outputs PNG files for development without hardware
   5. 4x supersampling maintained (render at 1000x488, scale to 250x122)
 
-**Plans**: TBD
+**Plans:** 3 plans
 
-Plans: *(to be defined during planning)*
+Plans:
+- [ ] 04-01-PLAN.md -- Rendering utilities (fonts, icons, bars)
+- [ ] 04-02-PLAN.md -- Screen renderers (Produktion, Verbrauch, Einspeisung, Bezug)
+- [ ] 04-03-PLAN.md -- Display LANCZOS downsampling, Pillow dependency, visual verification
 
 ---
 
@@ -154,7 +157,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 1. Cleanup & Fresh Repository | 2/2 | Complete | 2026-02-05 |
 | 2. Configuration Foundation | 1/1 | Complete | 2026-02-06 |
 | 3. Architecture & Data Layer | 3/3 | Complete | 2026-02-06 |
-| 4. Display Layer | 0/TBD | Not started | - |
+| 4. Display Layer | 0/3 | Not started | - |
 | 5. Operations | 0/TBD | Not started | - |
 | 6. Deployment | 0/TBD | Not started | - |
 
