@@ -6,23 +6,23 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 **Core value:** Show the homeowner their solar energy state at a glance — production, battery, grid, consumption — on a physical e-ink display that's always up to date.
 
-**Current focus:** Phase 4 in progress — Display Layer
+**Current focus:** Phase 4 complete — Display Layer
 
 ## Current Position
 
 Phase: 4 of 6 (Display Layer)
-Plan: 2 of 5 completed
-Status: In progress
-Last activity: 2026-02-06 — Completed 04-02-PLAN.md (Screen renderers)
+Plan: 3 of 3 completed
+Status: Complete
+Last activity: 2026-02-06 — Completed 04-03-PLAN.md (LANCZOS downsampling + visual verification)
 
-Progress: [████████░░] 89% (8/9 plans)
+Progress: [█████████░] 100% (9/9 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
-- Average duration: 2.0 minutes
-- Total execution time: 0.28 hours
+- Total plans completed: 9
+- Average duration: 1.9 minutes
+- Total execution time: 0.31 hours
 
 **By Phase:**
 
@@ -31,10 +31,10 @@ Progress: [████████░░] 89% (8/9 plans)
 | 01 | 2 | 8.8 min | 4.4 min |
 | 02 | 1 | 2.0 min | 2.0 min |
 | 03 | 3 | 4.0 min | 1.3 min |
-| 04 | 2 | 3.4 min | 1.7 min |
+| 04 | 3 | 5.4 min | 1.8 min |
 
 **Recent Trend:**
-- Last 5 plans: 2.0 min, 1.0 min, 1.0 min, 1.4 min, 2.0 min
+- Last 5 plans: 1.0 min, 1.0 min, 1.4 min, 2.0 min, 2.0 min
 - Trend: Excellent (consistently sub-2.5 min)
 
 *Updated after each plan completion*
@@ -69,6 +69,9 @@ Progress: [████████░░] 89% (8/9 plans)
 - Phase 4: Bar percentage maxes: 20 kWh (production), 15 kWh (consumption), 10 kWh (feed-in/purchased)
 - Phase 4: Battery energy calculated as delta from production/consumption/self-consumption/purchased/feed-in
 - Phase 4: Unit text baseline-aligned to right of main values for professional typography
+- Phase 4: LANCZOS via L-mode intermediate for quality downsampling (1-bit -> grayscale -> resize -> 1-bit)
+- Phase 4: Debug PNG at full 1000x488 resolution; e-ink gets LANCZOS-scaled 250x122
+- Phase 4: Pillow>=10.0.0,<11.0.0 for Python 3.9 compatibility
 
 ### Pending Todos
 
@@ -81,7 +84,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 04-02-PLAN.md (Screen renderers) — Phase 4 plan 2 of 5
+Stopped at: Completed Phase 4 (Display Layer) — all 3 plans done, user-verified
 Resume file: None
 
 ---
