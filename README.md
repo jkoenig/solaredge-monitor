@@ -1,8 +1,8 @@
 # SolarEdge Off-Grid Monitor
 
-A Raspberry Pi-powered e-ink display that shows your SolarEdge solar energy data at a glance — production, consumption, grid feed-in, purchased energy, and battery state.
+A Raspberry Pi-powered e-ink display that shows your SolarEdge solar energy data at a glance — production, consumption, grid feed-in, purchased energy, battery state, and 2-week history.
 
-The display cycles through up to 5 screens, each showing a daily energy metric with a proportional bar and breakdown. The battery screen is auto-detected at startup and only shown when a battery is installed. Updates every 5 minutes. Sleeps at night. Runs as a systemd service on your Pi.
+The display cycles through up to 7 screens, each showing a daily energy metric with a proportional bar and breakdown, plus two 14-day histogram screens. The battery screen is auto-detected at startup and only shown when a battery is installed. Updates every 5 minutes. Sleeps at night. Runs as a systemd service on your Pi.
 
 ## Screens
 
@@ -13,6 +13,8 @@ The display cycles through up to 5 screens, each showing a daily energy metric w
 | ![Einspeisung](docs/screen-einspeisung.png) | ![Bezug](docs/screen-bezug.png) |
 | **Hausakku (Laden)** | **Hausakku (Entladen)** |
 | ![Hausakku Laden](docs/screen-hausakku-charging.png) | ![Hausakku Entladen](docs/screen-hausakku-discharging.png) |
+| **Verlauf Produktion** | **Verlauf Verbrauch** |
+| ![Verlauf Produktion](docs/screen-verlauf-produktion.png) | ![Verlauf Verbrauch](docs/screen-verlauf-verbrauch.png) |
 
 ## Hardware
 
@@ -30,7 +32,7 @@ Total: ~CHF 49
 1. **Fetches energy data** from the SolarEdge monitoring API every 5 minutes
 2. **Renders 4 screens** at 4x resolution (1000x488) using PIL for high-quality output
 3. **Downsamples to 250x122** with LANCZOS resampling for crisp e-ink text
-4. **Cycles through screens** on the display (Production → Consumption → Feed-in → Purchased → Battery if installed)
+4. **Cycles through screens** on the display (Production → Consumption → Feed-in → Purchased → Battery if installed → History)
 5. **Sleeps between midnight and 6 AM** when there's no solar production
 
 ## Prerequisites
@@ -235,7 +237,7 @@ SolarEdge has rate limits on their API. If you see 429 errors in logs:
 ├── main.py                    # Entry point — polling loop and screen cycling
 ├── config.py                  # Environment-based configuration
 ├── solaredge_api.py           # SolarEdge API client with retry logic
-├── models.py                  # Data models (PowerFlow, EnergyDetails, SiteOverview, BatteryData)
+├── models.py                  # Data models (PowerFlow, EnergyDetails, EnergyHistory, SiteOverview, BatteryData)
 ├── display.py                 # Display abstraction (e-ink / PNG debug mode)
 ├── logging_setup.py           # JSON logging configuration (stdout + rotating file)
 ├── screens/                   # Screen renderers (one per display screen)
@@ -245,6 +247,7 @@ SolarEdge has rate limits on their API. If you see 429 errors in logs:
 │   ├── feed_in.py            # Einspeisung — grid feed-in
 │   ├── purchased.py          # Bezug — grid purchase
 │   ├── battery.py            # Hausakku — battery state (auto-detected)
+│   ├── history.py            # Verlauf — 14-day production/consumption histograms
 │   └── error.py              # Error screen (API failures)
 ├── rendering/                 # Drawing primitives (fonts, icons, bars)
 │   ├── fonts.py              # Font loading and caching
