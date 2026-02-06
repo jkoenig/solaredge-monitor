@@ -11,7 +11,7 @@ from rendering.fonts import load_font
 from rendering.bars import draw_horizontal_bar
 
 # Unified layout constants (shared across all screens)
-MARGIN = 15
+MARGIN = 5
 CANVAS_W, CANVAS_H = 1000, 488
 
 
@@ -29,10 +29,10 @@ def render_purchased_screen(data: EnergyDetails) -> Image:
     draw = ImageDraw.Draw(img)
 
     # Fonts (unified across all screens)
-    label_font = load_font('Arial.ttf', 48)
+    label_font = load_font('Arial.ttf', 60)
     value_font = load_font('ArialBlack.ttf', 120)
-    unit_font = load_font('Arial.ttf', 40)
-    bar_font = load_font('Arial.ttf', 28)
+    unit_font = load_font('Arial.ttf', 64)
+    bar_font = load_font('Arial.ttf', 44)
 
     # --- HEADLINE: top-left ---
     label_text = "Bezug"
@@ -45,7 +45,7 @@ def render_purchased_screen(data: EnergyDetails) -> Image:
     value_measure = draw.textbbox((0, 0), value_text, font=value_font)
     value_h = value_measure[3]
 
-    bar_h = 30
+    bar_h = 40
     gap_value_bar = 20
     gap_bar_label = 5
     bar_label_text = "Anteil Verbrauch 100%"
@@ -54,7 +54,7 @@ def render_purchased_screen(data: EnergyDetails) -> Image:
 
     group_h = value_h + gap_value_bar + bar_h + gap_bar_label + bar_label_h
     available_top = label_bottom
-    available_bottom = CANVAS_H - MARGIN - 130  # same as breakdown_y_start on other screens
+    available_bottom = CANVAS_H - MARGIN - 100  # same as breakdown_y_start on other screens
     value_y = available_top + (available_bottom - available_top - group_h) // 2
 
     draw.text((MARGIN, value_y), value_text, fill=0, font=value_font)
