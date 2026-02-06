@@ -23,6 +23,11 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from pathlib import Path
+
+# Add lib/ to sys.path so waveshare_epd driver can be imported
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+
 from dotenv import load_dotenv
 
 # Load .env before importing Config (Config reads from environment)

@@ -13,12 +13,14 @@ import os
 from datetime import datetime
 from PIL import Image
 
-# Try to import e-ink driver
+# Try to import e-ink driver (error stored for deferred logging)
+_EINK_IMPORT_ERROR = None
 try:
     from waveshare_epd import epd2in13_V3
     EINK_AVAILABLE = True
-except ImportError:
+except Exception as e:
     EINK_AVAILABLE = False
+    _EINK_IMPORT_ERROR = f"{type(e).__name__}: {e}"
 
 
 class Display:
@@ -51,6 +53,8 @@ class Display:
             os.makedirs("debug", exist_ok=True)
             reason = "debug mode" if debug_mode else "driver not found"
             logging.info(f"Display: PNG backend ({reason})")
+            if _EINK_IMPORT_ERROR and not debug_mode:
+                logging.warning(f"E-ink driver import failed: {_EINK_IMPORT_ERROR}")
 
     def render(self, image, name: str = "screen"):
         """Render image to display or save as PNG.

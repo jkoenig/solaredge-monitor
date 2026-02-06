@@ -122,7 +122,8 @@ class Config:
 
         logging.info("Configuration loaded:")
         logging.info(f"  SOLAREDGE_API_KEY: {masked_key}")
-        logging.info(f"  SOLAREDGE_SITE_ID: {self.site_id}")
+        masked_site = f"****{self.site_id[-4:]}" if len(self.site_id) >= 4 else "****"
+        logging.info(f"  SOLAREDGE_SITE_ID: {masked_site}")
         logging.info(f"  SOLAREDGE_POLL_INTERVAL: {self.poll_interval} min")
         logging.info(f"  SOLAREDGE_SLEEP_START: {self.sleep_start_hour}:00")
         logging.info(f"  SOLAREDGE_SLEEP_END: {self.sleep_end_hour}:00")

@@ -74,6 +74,7 @@ fi
 echo "[4/6] Installing Python dependencies..."
 venv/bin/pip install --upgrade pip -q
 venv/bin/pip install -r requirements.txt -q
+venv/bin/pip install -r requirements-pi.txt -q
 echo "  ✓ Dependencies installed"
 
 # [5/6] Create .env file
