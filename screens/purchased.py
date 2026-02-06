@@ -65,10 +65,10 @@ def render_purchased_screen(data: EnergyDetails) -> Image:
     draw.text((value_x, value_y), value_text, fill=0, font=value_font)
     draw.text((unit_x, unit_y), unit_text, fill=0, font=unit_font)
 
-    # Horizontal bar (purchased / 10.0 * 100, capped at 100%)
-    bar_y = value_y + value_height + 50
+    # Horizontal bar showing purchased as percentage of consumption
+    bar_y = value_y + value_height + 60
     bar_bbox = (100, bar_y, 850, bar_y + 50)
-    percentage = min(100.0, (data.purchased / 10.0) * 100.0)
-    draw_horizontal_bar(draw, bar_bbox, percentage, bar_font)
+    percentage = min(100.0, (data.purchased / data.consumption) * 100.0) if data.consumption > 0 else 0.0
+    draw_horizontal_bar(draw, bar_bbox, percentage, bar_font, label="Anteil Verbrauch")
 
     return img
