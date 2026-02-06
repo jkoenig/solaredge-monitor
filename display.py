@@ -11,6 +11,7 @@ This is a STUB for Phase 4. Full rendering logic will be implemented later.
 import logging
 import os
 from datetime import datetime
+from PIL import Image
 
 # Try to import e-ink driver
 try:
@@ -54,22 +55,24 @@ class Display:
     def render(self, image, name: str = "screen"):
         """Render image to display or save as PNG.
 
-        STUB: Full rendering logic will be implemented in Phase 4.
+        Uses LANCZOS resampling for high-quality downsampling to e-ink resolution.
 
         Args:
             image: PIL Image to render (1000x488 high-res)
             name: Base filename for PNG output
         """
         if self.backend == "eink":
-            # Scale down and display
-            scaled = image.resize((self.width, self.height))
-            self.epd.display(self.epd.getbuffer(scaled))
-            logging.info(f"Rendered to e-ink display")
+            # High-quality downsampling: 1-bit -> grayscale -> resize -> 1-bit
+            gray = image.convert('L')
+            scaled = gray.resize((self.width, self.height), Image.LANCZOS)
+            final = scaled.convert('1')
+            self.epd.display(self.epd.getbuffer(final))
+            logging.info(f"Rendered '{name}' to e-ink display")
         else:
-            # Save to debug folder
+            # Save high-res PNG to debug folder (for visual inspection)
             filename = f"debug/{name}_{datetime.now():%Y%m%d_%H%M%S}.png"
             image.save(filename)
-            logging.info(f"Rendered {self.width}x{self.height} to {filename}")
+            logging.info(f"Rendered '{name}' ({image.width}x{image.height}) to {filename}")
 
     def clear(self):
         """Clear the display."""
