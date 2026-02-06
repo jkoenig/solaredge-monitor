@@ -6,7 +6,7 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 **Core value:** Show the homeowner their solar energy state at a glance — production, battery, grid, consumption — on a physical e-ink display that's always up to date.
 
-**Current focus:** Phase 6 in progress — Deployment
+**Current focus:** Phase 6 complete — Deployment (milestone complete)
 
 ## Current Position
 

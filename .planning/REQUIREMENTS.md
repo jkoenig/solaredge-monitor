@@ -54,9 +54,9 @@
 
 ### Deployment (DEP)
 
-- [ ] **DEP-01**: Deployment via git pull on Raspberry Pi Zero WH
-- [ ] **DEP-02**: systemd service file for automatic startup and restart
-- [ ] **DEP-03**: Setup script or documentation for initial Pi provisioning (SPI enable, dependencies, venv)
+- [x] **DEP-01**: Deployment via git pull on Raspberry Pi Zero WH
+- [x] **DEP-02**: systemd service file for automatic startup and restart
+- [x] **DEP-03**: Setup script or documentation for initial Pi provisioning (SPI enable, dependencies, venv)
 
 ## v2 Requirements (Deferred)
 
@@ -113,9 +113,9 @@
 | OPS-03 | Phase 5 | Complete |
 | OPS-04 | Phase 5 | Complete |
 | OPS-05 | Phase 5 | Complete |
-| DEP-01 | Phase 6 | Pending |
-| DEP-02 | Phase 6 | Pending |
-| DEP-03 | Phase 6 | Pending |
+| DEP-01 | Phase 6 | Complete |
+| DEP-02 | Phase 6 | Complete |
+| DEP-03 | Phase 6 | Complete |
 
 ---
 *Last updated: 2026-02-06*

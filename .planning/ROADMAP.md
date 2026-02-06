@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Architecture & Data Layer** - Modular structure with SolarEdge API clients
 - [x] **Phase 4: Display Layer** - Separate rendering with improved fonts and debug mode
 - [x] **Phase 5: Operations** - Polling loop, logging, and graceful shutdown
-- [ ] **Phase 6: Deployment** - Git pull deployment with systemd service
+- [x] **Phase 6: Deployment** - Git pull deployment with systemd service
 
 ## Phase Details
 
@@ -146,8 +146,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 06-01-PLAN.md -- systemd service file, install script, and deploy script
-- [ ] 06-02-PLAN.md -- .gitignore update and full README documentation
+- [x] 06-01-PLAN.md -- systemd service file, install script, and deploy script
+- [x] 06-02-PLAN.md -- .gitignore update and full README documentation
 
 ---
 
@@ -163,7 +163,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 3. Architecture & Data Layer | 3/3 | Complete | 2026-02-06 |
 | 4. Display Layer | 3/3 | Complete | 2026-02-06 |
 | 5. Operations | 2/2 | Complete | 2026-02-06 |
-| 6. Deployment | 0/2 | Not started | - |
+| 6. Deployment | 2/2 | Complete | 2026-02-06 |
 
 ---
 
