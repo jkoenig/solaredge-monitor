@@ -32,6 +32,7 @@ class Config:
         - sleep_start_hour: Hour to pause polling, 0-23 (default: 0 = midnight)
         - sleep_end_hour: Hour to resume polling, 0-23 (default: 6 = 6 AM)
         - debug: Enable debug mode (default: False)
+        - log_level: Logging level (default: INFO)
     """
 
     # Required credentials
@@ -43,6 +44,7 @@ class Config:
     sleep_start_hour: int = 0
     sleep_end_hour: int = 6
     debug: bool = False
+    log_level: str = "INFO"
 
     def __post_init__(self):
         """Load values from environment variables and validate.
@@ -96,6 +98,14 @@ class Config:
         debug_str = os.environ.get("SOLAREDGE_DEBUG", "false").lower()
         self.debug = debug_str in ("true", "1", "yes", "on")
 
+        # Load and validate log level
+        log_level_str = os.environ.get("SOLAREDGE_LOG_LEVEL", "INFO").upper()
+        valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+        if log_level_str in valid_levels:
+            self.log_level = log_level_str
+        else:
+            errors.append(f"  - SOLAREDGE_LOG_LEVEL: Must be one of DEBUG, INFO, WARNING, ERROR, CRITICAL (got '{log_level_str}')")
+
         # Report all errors at once
         if errors:
             error_msg = "ERROR: Configuration validation failed:\n" + "\n".join(errors)
@@ -117,3 +127,4 @@ class Config:
         logging.info(f"  SOLAREDGE_SLEEP_START: {self.sleep_start_hour}:00")
         logging.info(f"  SOLAREDGE_SLEEP_END: {self.sleep_end_hour}:00")
         logging.info(f"  SOLAREDGE_DEBUG: {self.debug}")
+        logging.info(f"  SOLAREDGE_LOG_LEVEL: {self.log_level}")
