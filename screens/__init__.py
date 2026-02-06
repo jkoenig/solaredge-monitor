@@ -2,11 +2,34 @@ from screens.production import render_production_screen
 from screens.consumption import render_consumption_screen
 from screens.feed_in import render_feed_in_screen
 from screens.purchased import render_purchased_screen
+from screens.battery import render_battery_screen
 
-# Screen registry for cycling (Phase 5 polling loop uses this)
+# Legacy screen list (energy screens only)
 SCREENS = [
     render_production_screen,
     render_consumption_screen,
     render_feed_in_screen,
     render_purchased_screen,
 ]
+
+
+def get_screens(has_battery=False):
+    """Build dynamic screen list based on system capabilities.
+
+    Returns list of (render_fn, data_key, name) tuples where data_key
+    indicates which data object the render function expects:
+    - "energy": EnergyDetails
+    - "battery": BatteryData
+
+    Args:
+        has_battery: Whether the site has a battery installed
+    """
+    screens = [
+        (render_production_screen, "energy", "Produktion"),
+        (render_consumption_screen, "energy", "Verbrauch"),
+        (render_feed_in_screen, "energy", "Einspeisung"),
+        (render_purchased_screen, "energy", "Bezug"),
+    ]
+    if has_battery:
+        screens.append((render_battery_screen, "battery", "Hausakku"))
+    return screens

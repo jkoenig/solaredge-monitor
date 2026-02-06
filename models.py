@@ -82,3 +82,23 @@ class SiteOverview:
     last_month_energy: float
     last_day_energy: float
     fetched_at: datetime = field(default_factory=datetime.now)
+
+
+@dataclass(frozen=True)
+class BatteryData:
+    """Current battery state for Akku screen.
+
+    Fields:
+        state_of_charge: Battery level 0-100% (from PowerFlow)
+        status: "Charge"/"Discharge"/"Idle" (from PowerFlow)
+        internal_temp: Battery temperature in °C (from storageData)
+        available_energy: Available energy in kWh (from storageData)
+        power: Battery power in kW (from storageData)
+        fetched_at: Timestamp when data was retrieved
+    """
+    state_of_charge: int
+    status: str
+    internal_temp: float
+    available_energy: float
+    power: float
+    fetched_at: datetime = field(default_factory=datetime.now)
