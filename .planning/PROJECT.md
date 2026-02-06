@@ -2,42 +2,40 @@
 
 ## What This Is
 
-A Raspberry Pi Zero WH-powered e-ink display monitor that shows real-time SolarEdge solar energy data — production, battery state, grid status, and consumption. Deployed via git pull + systemd to a single Raspberry Pi Zero WH (1 GHz, 512 MB RAM) with a Waveshare 2.13" e-ink display. Focused on readability and clean architecture.
+A Raspberry Pi Zero WH-powered e-ink display monitor that shows daily SolarEdge solar energy data — production, consumption, feed-in, and purchased energy — on a Waveshare 2.13" display. Modular Python application deployed via git pull + systemd with 4 focused screens, 4x supersampling for readability, and automated setup/deploy scripts.
 
 ## Core Value
 
-Show the homeowner their solar energy state at a glance — production, battery, grid, consumption — on a physical e-ink display that's always up to date.
+Show the homeowner their solar energy state at a glance — production, consumption, feed-in, purchased — on a physical e-ink display that's always up to date.
 
 ## Requirements
 
 ### Validated
 
-- ✓ Fetch SolarEdge site overview (daily energy, lifetime stats) — existing
-- ✓ Fetch SolarEdge energy details (consumption, production, feed-in, purchased) — existing
-- ✓ Fetch SolarEdge current power flow (grid, load, PV, storage, off-grid state) — existing
-- ✓ Render data to Waveshare 2.13" V3 e-ink display via PIL — existing
-- ✓ Cycle through multiple display screens sequentially — existing
-- ✓ Time-gated operation (sleep between midnight and 6 AM) — existing
-- ✓ Debug mode with PNG output for development without hardware — existing
+- ✓ Fetch SolarEdge site overview (daily energy, lifetime stats) — v1
+- ✓ Fetch SolarEdge energy details (consumption, production, feed-in, purchased) — v1
+- ✓ Fetch SolarEdge current power flow (grid, load, PV, storage, off-grid state) — v1
+- ✓ Render data to Waveshare 2.13" V3 e-ink display via PIL — v1
+- ✓ Cycle through multiple display screens sequentially — v1
+- ✓ Time-gated operation (sleep between midnight and 6 AM) — v1
+- ✓ Debug mode with PNG output for development without hardware — v1
+- ✓ Clean modular architecture (separate API, display, config layers) — v1
+- ✓ Environment-based configuration (no hardcoded credentials) — v1
+- ✓ Git pull + systemd deployment to Raspberry Pi Zero WH — v1
+- ✓ Improved display readability (larger fonts, better layout for 250x122) — v1
+- ✓ Focused display screens with screen cycling (4 screens: Produktion, Verbrauch, Einspeisung, Bezug) — v1
+- ✓ 5-minute polling interval with proper error handling and retry — v1
+- ✓ Fresh git repository (no credential history) — v1
+- ✓ Proper dependency management (requirements.txt with pinned versions) — v1
+- ✓ Structured logging with appropriate log levels — v1
+- ✓ Graceful shutdown handling (SIGTERM/SIGINT) — v1
 
 ### Active
 
-- [ ] Clean modular architecture (separate API, display, config layers)
-- [ ] Environment-based configuration (no hardcoded credentials)
-- [ ] Git pull + systemd deployment to Raspberry Pi Zero WH
-- [ ] Improved display readability (larger fonts, better layout for 250x122)
-- [ ] Focused display screens with screen cycling (content TBD)
-- [ ] 5-minute polling interval with proper error handling and retry
-- [ ] Fresh git repository (no credential history)
-- [ ] Proper dependency management (requirements.txt with pinned versions)
-- [ ] Structured logging with appropriate log levels
-- [ ] Graceful shutdown handling (SIGTERM/SIGINT)
+(None — next milestone requirements TBD)
 
 ### Out of Scope
 
-- VW WeConnect integration — removing, not a solar monitor feature
-- BMW ConnectedDrive integration — removing, not a solar monitor feature
-- Time Machine disk usage monitoring — removing, not a solar monitor feature
 - Multi-display support — single Pi, single display
 - Web dashboard or API — this is a dedicated hardware display
 - Database or persistent storage — stateless monitor, fresh data each cycle
@@ -46,15 +44,9 @@ Show the homeowner their solar energy state at a glance — production, battery,
 
 ## Context
 
-- Existing codebase is a working MVP (828-line monolithic script) generated with an older AI
-- All code in a single `se-overview.py` with hardcoded credentials, duplicated display functions, and mixed concerns
-- VW, BMW, and SSH integrations account for ~40% of code and will be removed entirely
-- Current fonts are too small for the 250x122 pixel display — readability is poor
-- Waveshare e-ink driver library (`lib/waveshare_epd/`) includes 60+ unused drivers — only `epd2in13_V3` is needed
-- SolarEdge monitoring API updates roughly every 15 minutes, so 5-minute polling is sufficient
-- Credentials are baked into git history — requires a fresh repo to publish safely on GitHub
-- Display uses 4x supersampling (render at 1000x488, scale down to 250x122) for quality
-- Target hardware: Raspberry Pi Zero WH (1 GHz, 512 MB RAM) — too constrained for Docker/Kamal
+Shipped v1 with 1,736 lines of Python across 17 modules. Tech stack: Python 3.9+, Pillow, requests, python-dotenv, python-json-logger, Waveshare e-ink driver. Deployed on Raspberry Pi Zero WH (1 GHz, 512 MB) via systemd.
+
+Known tech debt: PowerFlow data fetched but not displayed (reserved for v2), SiteOverview API method implemented but unused (reserved for v2).
 
 ## Constraints
 
@@ -69,14 +61,19 @@ Show the homeowner their solar energy state at a glance — production, battery,
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Fresh git repo instead of history rewrite | Simplest way to remove credentials, existing history has no significant value | — Pending |
-| Environment variables for credentials | Standard practice, .env file for Pi deployment | — Pending |
-| Git pull + systemd for deployment | Pi Zero WH too constrained for Docker/Kamal (512 MB RAM) | — Pending |
-| 5-minute polling interval | SolarEdge data updates ~15 min, 5 min balances freshness vs API load | — Pending |
-| Keep 2.13" display | User confirmed, improve readability through better font/layout choices | — Pending |
-| Cycle through screens | User preference over single dashboard — keeps each screen focused and readable | — Pending |
-| SolarEdge only | Strip VW, BMW, disk monitoring — focused single-purpose tool | — Pending |
-| Sleep midnight-6AM | User confirmed current behavior, no solar production at night | — Pending |
+| Fresh git repo instead of history rewrite | Simplest way to remove credentials, existing history has no significant value | ✓ Good |
+| Environment variables for credentials | Standard practice, .env file for Pi deployment | ✓ Good |
+| Git pull + systemd for deployment | Pi Zero WH too constrained for Docker/Kamal (512 MB RAM) | ✓ Good |
+| 5-minute polling interval | SolarEdge data updates ~15 min, 5 min balances freshness vs API load | ✓ Good |
+| Keep 2.13" display | User confirmed, improve readability through better font/layout choices | ✓ Good |
+| Cycle through screens | User preference over single dashboard — keeps each screen focused and readable | ✓ Good |
+| SolarEdge only | Strip VW, BMW, disk monitoring — focused single-purpose tool | ✓ Good |
+| Sleep midnight-6AM | User confirmed current behavior, no solar production at night | ✓ Good |
+| Frozen dataclasses for API models | Immutability prevents accidental state mutation | ✓ Good |
+| LANCZOS downsampling via L-mode intermediate | High quality 4x scale-down for 1-bit e-ink output | ✓ Good |
+| JSON structured logging | Machine-parseable logs for systemd journal and rotating file | ✓ Good |
+| Europe/Berlin timezone hardcoded | Single-site monitor, no need for timezone configuration | ✓ Good |
+| German screen labels | User's native language for at-a-glance reading | ✓ Good |
 
 ---
-*Last updated: 2026-02-04 after roadmap creation*
+*Last updated: 2026-02-06 after v1 milestone*
