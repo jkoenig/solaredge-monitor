@@ -10,7 +10,7 @@ includes a 10-second timeout per request.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 import requests
 from requests.adapters import HTTPAdapter
@@ -223,4 +223,73 @@ class SolarEdgeAPI:
             )
         except (KeyError, ValueError, TypeError) as e:
             logging.error(f"Failed to parse site overview response: {e}")
+            return None
+
+    def has_battery(self) -> bool:
+        """Check if site has a battery via inventory API.
+
+        Called once at startup to determine whether to show the Akku screen.
+
+        Returns:
+            True if site has at least one battery, False otherwise
+        """
+        endpoint = f"/site/{self.site_id}/inventory"
+        data = self._request(endpoint)
+
+        if data is None:
+            logging.warning("Failed to fetch inventory, assuming no battery")
+            return False
+
+        try:
+            batteries = data.get("Inventory", {}).get("batteries", [])
+            return len(batteries) > 0
+        except (TypeError, AttributeError) as e:
+            logging.error(f"Failed to parse inventory response: {e}")
+            return False
+
+    def get_storage_data(self) -> Optional[dict]:
+        """Fetch latest battery telemetry from storageData API.
+
+        Queries the last 2 hours to ensure we get at least one data point.
+        Returns the most recent telemetry entry.
+
+        Returns:
+            dict with internal_temp (°C), available_energy (kWh), power (kW)
+            None on failure or no data
+        """
+        endpoint = f"/site/{self.site_id}/storageData"
+
+        now = datetime.now()
+        start = now - timedelta(hours=2)
+        params = {
+            "startTime": start.strftime("%Y-%m-%d %H:%M:%S"),
+            "endTime": now.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+
+        data = self._request(endpoint, params)
+
+        if data is None:
+            logging.warning("Failed to fetch storage data")
+            return None
+
+        try:
+            batteries = data.get("storageData", {}).get("batteries", [])
+            if not batteries:
+                logging.warning("No batteries in storage data response")
+                return None
+
+            telemetries = batteries[0].get("telemetries", [])
+            if not telemetries:
+                logging.warning("No telemetry entries in storage data")
+                return None
+
+            # Use the last (most recent) entry
+            latest = telemetries[-1]
+            return {
+                "internal_temp": float(latest.get("internalTemp", 0)),
+                "available_energy": float(latest.get("fullPackEnergyAvailable", 0)) / 1000.0,
+                "power": float(latest.get("power", 0)) / 1000.0,
+            }
+        except (KeyError, ValueError, TypeError, IndexError) as e:
+            logging.error(f"Failed to parse storage data response: {e}")
             return None

@@ -37,15 +37,13 @@ from config import Config
 from logging_setup import setup_logging
 from solaredge_api import SolarEdgeAPI
 from display import Display
-from screens import SCREENS
+from models import BatteryData
+from screens import get_screens
 from screens.error import render_error_screen
 
 
 # Module-level state
 shutdown_flag = False
-
-# Screen names for logging (matches order in SCREENS)
-SCREEN_NAMES = ["Produktion", "Verbrauch", "Einspeisung", "Bezug"]
 
 
 def signal_handler(signum, frame):
@@ -101,12 +99,12 @@ def interruptible_sleep(seconds: float) -> bool:
     return True
 
 
-def fetch_data(api: SolarEdgeAPI):
+def fetch_data(api: SolarEdgeAPI, has_battery: bool = False):
     """
     Fetch data from SolarEdge API.
 
     Returns:
-        tuple: (energy_details, power_flow) - either may be None on failure
+        tuple: (energy_details, battery_data) - either may be None on failure
     """
     energy_details = api.get_energy_details()
     power_flow = api.get_current_power_flow()
@@ -116,16 +114,31 @@ def fetch_data(api: SolarEdgeAPI):
     if power_flow:
         logging.debug(f"Fetched power flow: {power_flow}")
 
-    return energy_details, power_flow
+    battery_data = None
+    if has_battery and power_flow:
+        storage = api.get_storage_data()
+        battery_data = BatteryData(
+            state_of_charge=power_flow.state_of_charge,
+            status=power_flow.storage_status,
+            internal_temp=storage["internal_temp"] if storage else 0.0,
+            available_energy=storage["available_energy"] if storage else 0.0,
+            power=storage["power"] if storage else 0.0,
+        )
+        logging.debug(f"Fetched battery data: {battery_data}")
+
+    return energy_details, battery_data
 
 
-def run_screen_cycle(display: Display, data, screen_names: list) -> None:
+def run_screen_cycle(display: Display, cycle: list) -> None:
     """
-    Cycle through all 4 screens, displaying each for 60 seconds.
+    Cycle through screens, displaying each for 60 seconds.
+
+    Args:
+        cycle: list of (render_fn, data, name) tuples to display
 
     Breaks immediately if shutdown signal received during any sleep.
     """
-    for screen_fn, name in zip(SCREENS, screen_names):
+    for screen_fn, data, name in cycle:
         if shutdown_flag:
             break
 
@@ -168,10 +181,20 @@ def main():
     display = Display(debug_mode=config.debug)
     logging.info(f"Display initialized (backend: {display.backend})")
 
+    # Detect battery at startup
+    battery_detected = api.has_battery()
+    logging.info(f"Battery detected: {battery_detected}")
+
+    # Build dynamic screen list
+    screens = get_screens(has_battery=battery_detected)
+    screen_names = [name for _, _, name in screens]
+    logging.info(f"Screen rotation: {', '.join(screen_names)}")
+
     # Initialize polling state
     consecutive_failures = 0
     MAX_FAILURES = 3
-    last_successful_data = None
+    last_successful_energy = None
+    last_successful_battery = None
     poll_interval_seconds = config.poll_interval * 60
     in_sleep = False
     next_poll = time.monotonic()  # Poll immediately on startup
@@ -201,12 +224,14 @@ def main():
 
             # Fetch data
             logging.info("Starting poll cycle")
-            energy_details, power_flow = fetch_data(api)
+            energy_details, battery_data = fetch_data(api, has_battery=battery_detected)
 
             if energy_details is not None:
                 # Successful poll
                 consecutive_failures = 0
-                last_successful_data = energy_details
+                last_successful_energy = energy_details
+                if battery_data is not None:
+                    last_successful_battery = battery_data
                 logging.info(
                     f"Poll successful - Production: {energy_details.production:.2f} kWh, "
                     f"Consumption: {energy_details.consumption:.2f} kWh, "
@@ -214,8 +239,15 @@ def main():
                     f"Purchased: {energy_details.purchased:.2f} kWh"
                 )
 
-                # Run screen cycle
-                run_screen_cycle(display, energy_details, SCREEN_NAMES)
+                # Build screen cycle with appropriate data per screen
+                cycle = []
+                for render_fn, data_key, name in screens:
+                    if data_key == "energy":
+                        cycle.append((render_fn, energy_details, name))
+                    elif data_key == "battery" and battery_data:
+                        cycle.append((render_fn, battery_data, name))
+
+                run_screen_cycle(display, cycle)
 
             else:
                 # Poll failed
@@ -232,11 +264,16 @@ def main():
                     )
                     error_image = render_error_screen()
                     display.render(error_image, "error")
-                elif last_successful_data is not None:
+                elif last_successful_energy is not None:
                     # Show stale data before threshold
                     logging.info("Showing stale data from last successful poll")
-                    stale_image = SCREENS[0](last_successful_data)
-                    display.render(stale_image, "Produktion_stale")
+                    stale_cycle = []
+                    for render_fn, data_key, name in screens:
+                        if data_key == "energy":
+                            stale_cycle.append((render_fn, last_successful_energy, name))
+                        elif data_key == "battery" and last_successful_battery:
+                            stale_cycle.append((render_fn, last_successful_battery, name))
+                    run_screen_cycle(display, stale_cycle)
 
             # Schedule next poll
             next_poll += poll_interval_seconds
