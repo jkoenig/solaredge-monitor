@@ -38,7 +38,7 @@ from logging_setup import setup_logging
 from solaredge_api import SolarEdgeAPI
 from forecast_api import ForecastSolarAPI
 from display import Display
-from models import BatteryData
+from models import BatteryData, ForecastData
 from screens import get_screens
 from screens.error import render_error_screen
 
@@ -133,9 +133,16 @@ def fetch_data(api: SolarEdgeAPI, has_battery: bool = False, forecast_api: Forec
 
     forecast_data = None
     if forecast_api:
-        forecast_data = forecast_api.get_forecast()
-        if forecast_data:
-            logging.debug(f"Fetched forecast: today={forecast_data.today_kwh:.1f} kWh, tomorrow={forecast_data.tomorrow_kwh:.1f} kWh")
+        raw_forecast = forecast_api.get_forecast()
+        if raw_forecast:
+            actual_prod = energy_details.production if energy_details else 0.0
+            forecast_data = ForecastData(
+                today_kwh=raw_forecast.today_kwh,
+                tomorrow_kwh=raw_forecast.tomorrow_kwh,
+                actual_production=actual_prod,
+                fetched_at=raw_forecast.fetched_at,
+            )
+            logging.debug(f"Fetched forecast: today={forecast_data.today_kwh:.1f} kWh, tomorrow={forecast_data.tomorrow_kwh:.1f} kWh, actual={forecast_data.actual_production:.1f} kWh")
 
     return energy_details, battery_data, history_data, forecast_data
 
