@@ -85,6 +85,22 @@ class SiteOverview:
 
 
 @dataclass(frozen=True)
+class EnergyHistory:
+    """14-day daily energy history for histogram screens.
+
+    Fields:
+        dates: List of date strings ["2026-01-23", ...], length 14
+        production: Daily production in kWh, length 14 (0.0 for null days)
+        consumption: Daily consumption in kWh, length 14 (0.0 for null days)
+        fetched_at: Timestamp when data was retrieved
+    """
+    dates: list
+    production: list
+    consumption: list
+    fetched_at: datetime = field(default_factory=datetime.now)
+
+
+@dataclass(frozen=True)
 class BatteryData:
     """Current battery state for Akku screen.
 

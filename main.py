@@ -104,7 +104,7 @@ def fetch_data(api: SolarEdgeAPI, has_battery: bool = False):
     Fetch data from SolarEdge API.
 
     Returns:
-        tuple: (energy_details, battery_data) - either may be None on failure
+        tuple: (energy_details, battery_data, history_data) - any may be None on failure
     """
     energy_details = api.get_energy_details()
     power_flow = api.get_current_power_flow()
@@ -126,7 +126,11 @@ def fetch_data(api: SolarEdgeAPI, has_battery: bool = False):
         )
         logging.debug(f"Fetched battery data: {battery_data}")
 
-    return energy_details, battery_data
+    history_data = api.get_energy_history()
+    if history_data:
+        logging.debug(f"Fetched energy history: {len(history_data.dates)} days")
+
+    return energy_details, battery_data, history_data
 
 
 def run_screen_cycle(display: Display, cycle: list) -> None:
@@ -195,6 +199,7 @@ def main():
     MAX_FAILURES = 3
     last_successful_energy = None
     last_successful_battery = None
+    last_successful_history = None
     poll_interval_seconds = config.poll_interval * 60
     in_sleep = False
     next_poll = time.monotonic()  # Poll immediately on startup
@@ -224,7 +229,7 @@ def main():
 
             # Fetch data
             logging.info("Starting poll cycle")
-            energy_details, battery_data = fetch_data(api, has_battery=battery_detected)
+            energy_details, battery_data, history_data = fetch_data(api, has_battery=battery_detected)
 
             if energy_details is not None:
                 # Successful poll
@@ -232,6 +237,8 @@ def main():
                 last_successful_energy = energy_details
                 if battery_data is not None:
                     last_successful_battery = battery_data
+                if history_data is not None:
+                    last_successful_history = history_data
                 logging.info(
                     f"Poll successful - Production: {energy_details.production:.2f} kWh, "
                     f"Consumption: {energy_details.consumption:.2f} kWh, "
@@ -246,6 +253,8 @@ def main():
                         cycle.append((render_fn, energy_details, name))
                     elif data_key == "battery" and battery_data:
                         cycle.append((render_fn, battery_data, name))
+                    elif data_key == "history" and (history_data or last_successful_history):
+                        cycle.append((render_fn, history_data or last_successful_history, name))
 
                 run_screen_cycle(display, cycle)
 
@@ -273,6 +282,8 @@ def main():
                             stale_cycle.append((render_fn, last_successful_energy, name))
                         elif data_key == "battery" and last_successful_battery:
                             stale_cycle.append((render_fn, last_successful_battery, name))
+                        elif data_key == "history" and last_successful_history:
+                            stale_cycle.append((render_fn, last_successful_history, name))
                     run_screen_cycle(display, stale_cycle)
 
             # Schedule next poll
