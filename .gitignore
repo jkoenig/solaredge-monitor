@@ -13,6 +13,9 @@ __pycache__/
 # Debug output (generated at runtime)
 debug/
 
+# Legacy display screenshots (not used by new code)
+display/
+
 # OS files
 .DS_Store
 Thumbs.db
