@@ -3,6 +3,7 @@ from screens.consumption import render_consumption_screen
 from screens.feed_in import render_feed_in_screen
 from screens.purchased import render_purchased_screen
 from screens.battery import render_battery_screen
+from screens.history import render_history_production_screen, render_history_consumption_screen
 
 # Legacy screen list (energy screens only)
 SCREENS = [
@@ -20,6 +21,7 @@ def get_screens(has_battery=False):
     indicates which data object the render function expects:
     - "energy": EnergyDetails
     - "battery": BatteryData
+    - "history": EnergyHistory
 
     Args:
         has_battery: Whether the site has a battery installed
@@ -32,4 +34,6 @@ def get_screens(has_battery=False):
     ]
     if has_battery:
         screens.append((render_battery_screen, "battery", "Hausakku"))
+    screens.append((render_history_production_screen, "history", "Verlauf Produktion"))
+    screens.append((render_history_consumption_screen, "history", "Verlauf Verbrauch"))
     return screens

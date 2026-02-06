@@ -16,7 +16,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
-from models import PowerFlow, EnergyDetails, SiteOverview
+from models import PowerFlow, EnergyDetails, EnergyHistory, SiteOverview
 
 
 class SolarEdgeAPI:
@@ -246,6 +246,75 @@ class SolarEdgeAPI:
         except (TypeError, AttributeError) as e:
             logging.error(f"Failed to parse inventory response: {e}")
             return False
+
+    def get_energy_history(self, days: int = 14) -> Optional[EnergyHistory]:
+        """Fetch daily energy history for histogram screens.
+
+        Calls /energyDetails with timeUnit=DAY over a 14-day range.
+        Returns production and consumption per day in kWh.
+
+        Args:
+            days: Number of days of history (default 14)
+
+        Returns:
+            EnergyHistory with daily values, or None on failure
+        """
+        endpoint = f"/site/{self.site_id}/energyDetails"
+
+        today = datetime.now()
+        start = today - timedelta(days=days - 1)
+        params = {
+            "meters": "Production,Consumption",
+            "timeUnit": "DAY",
+            "startTime": start.strftime("%Y-%m-%d 00:00:00"),
+            "endTime": today.strftime("%Y-%m-%d 23:59:59"),
+        }
+
+        data = self._request(endpoint, params)
+
+        if data is None:
+            logging.warning("Failed to fetch energy history")
+            return None
+
+        try:
+            meters = data["energyDetails"]["meters"]
+
+            # Build date-indexed maps for each meter
+            production_by_date = {}
+            consumption_by_date = {}
+
+            for meter in meters:
+                meter_type = meter.get("type", "")
+                target = None
+                if meter_type == "Production":
+                    target = production_by_date
+                elif meter_type == "Consumption":
+                    target = consumption_by_date
+
+                if target is not None:
+                    for entry in meter.get("values", []):
+                        date_str = entry.get("date", "")[:10]  # "YYYY-MM-DD"
+                        value_wh = entry.get("value")
+                        target[date_str] = (value_wh or 0) / 1000.0
+
+            # Build ordered lists for each day
+            dates = []
+            production = []
+            consumption = []
+            for i in range(days):
+                d = (start + timedelta(days=i)).strftime("%Y-%m-%d")
+                dates.append(d)
+                production.append(production_by_date.get(d, 0.0))
+                consumption.append(consumption_by_date.get(d, 0.0))
+
+            return EnergyHistory(
+                dates=dates,
+                production=production,
+                consumption=consumption,
+            )
+        except (KeyError, ValueError, TypeError) as e:
+            logging.error(f"Failed to parse energy history response: {e}")
+            return None
 
     def get_storage_data(self) -> Optional[dict]:
         """Fetch latest battery telemetry from storageData API.
