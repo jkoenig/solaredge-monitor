@@ -34,9 +34,9 @@ def render_consumption_screen(data: EnergyDetails) -> Image:
     label_font = load_font('Arial.ttf', 60)
     value_font = load_font('ArialBlack.ttf', 120)
     unit_font = load_font('Arial.ttf', 64)
-    breakdown_label_font = load_font('Arial.ttf', 40)
-    breakdown_value_font = load_font('Arial.ttf', 48)
-    bar_font = load_font('Arial.ttf', 44)
+    breakdown_label_font = load_font('Arial.ttf', 52)
+    breakdown_value_font = load_font('Arial.ttf', 60)
+    bar_font = load_font('Arial.ttf', 56)
 
     # --- HEADLINE: top-left ---
     label_text = "Verbrauch"
@@ -45,8 +45,8 @@ def render_consumption_screen(data: EnergyDetails) -> Image:
     label_bottom = label_bbox[3]
 
     # --- 3-COLUMN BREAKDOWN: sticky to bottom ---
-    # label(~40) + gap(8) + value(~48) = ~100px
-    breakdown_y_start = CANVAS_H - MARGIN - 100
+    # label(~52) + gap(8) + value(~60) = ~110px
+    breakdown_y_start = CANVAS_H - MARGIN - 110
 
     # --- VALUE+BAR GROUP: vertically centered between headline and breakdown ---
     value_text = f"{data.consumption:.1f}"

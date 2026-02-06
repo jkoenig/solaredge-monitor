@@ -32,7 +32,7 @@ def render_feed_in_screen(data: EnergyDetails) -> Image:
     label_font = load_font('Arial.ttf', 60)
     value_font = load_font('ArialBlack.ttf', 120)
     unit_font = load_font('Arial.ttf', 64)
-    bar_font = load_font('Arial.ttf', 44)
+    bar_font = load_font('Arial.ttf', 56)
 
     # --- HEADLINE: top-left ---
     label_text = "Einspeisung"
@@ -54,7 +54,7 @@ def render_feed_in_screen(data: EnergyDetails) -> Image:
 
     group_h = value_h + gap_value_bar + bar_h + gap_bar_label + bar_label_h
     available_top = label_bottom
-    available_bottom = CANVAS_H - MARGIN - 100  # same as breakdown_y_start on other screens
+    available_bottom = CANVAS_H - MARGIN - 110  # same as breakdown_y_start on other screens
     value_y = available_top + (available_bottom - available_top - group_h) // 2
 
     draw.text((MARGIN, value_y), value_text, fill=0, font=value_font)
