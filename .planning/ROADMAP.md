@@ -77,9 +77,12 @@ Plans:
   4. SolarEdge API client fetches power flow, site overview, and energy details with graceful error handling
   5. API responses use typed data models (dataclasses) instead of raw lists/tuples
 
-**Plans**: TBD
+**Plans:** 3 plans
 
-Plans: *(to be defined during planning)*
+Plans:
+- [ ] 03-01-PLAN.md -- Create data models (PowerFlow, EnergyDetails, SiteOverview) and add requests dependency
+- [ ] 03-02-PLAN.md -- Create SolarEdge API client with retry logic and error handling
+- [ ] 03-03-PLAN.md -- Create display hardware abstraction and main.py entry point
 
 ---
 
@@ -144,13 +147,13 @@ Plans: *(to be defined during planning)*
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Cleanup & Fresh Repository | 2/2 | ✓ Complete | 2026-02-05 |
-| 2. Configuration Foundation | 1/1 | ✓ Complete | 2026-02-06 |
-| 3. Architecture & Data Layer | 0/TBD | Not started | - |
+| 1. Cleanup & Fresh Repository | 2/2 | Complete | 2026-02-05 |
+| 2. Configuration Foundation | 1/1 | Complete | 2026-02-06 |
+| 3. Architecture & Data Layer | 0/3 | Planned | - |
 | 4. Display Layer | 0/TBD | Not started | - |
 | 5. Operations | 0/TBD | Not started | - |
 | 6. Deployment | 0/TBD | Not started | - |
