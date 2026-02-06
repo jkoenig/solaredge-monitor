@@ -36,6 +36,7 @@ load_dotenv()
 from config import Config
 from logging_setup import setup_logging
 from solaredge_api import SolarEdgeAPI
+from forecast_api import ForecastSolarAPI
 from display import Display
 from models import BatteryData
 from screens import get_screens
@@ -99,12 +100,12 @@ def interruptible_sleep(seconds: float) -> bool:
     return True
 
 
-def fetch_data(api: SolarEdgeAPI, has_battery: bool = False):
+def fetch_data(api: SolarEdgeAPI, has_battery: bool = False, forecast_api: ForecastSolarAPI = None):
     """
     Fetch data from SolarEdge API.
 
     Returns:
-        tuple: (energy_details, battery_data, history_data) - any may be None on failure
+        tuple: (energy_details, battery_data, history_data, forecast_data) - any may be None on failure
     """
     energy_details = api.get_energy_details()
     power_flow = api.get_current_power_flow()
@@ -130,7 +131,13 @@ def fetch_data(api: SolarEdgeAPI, has_battery: bool = False):
     if history_data:
         logging.debug(f"Fetched energy history: {len(history_data.dates)} days")
 
-    return energy_details, battery_data, history_data
+    forecast_data = None
+    if forecast_api:
+        forecast_data = forecast_api.get_forecast()
+        if forecast_data:
+            logging.debug(f"Fetched forecast: today={forecast_data.today_kwh:.1f} kWh, tomorrow={forecast_data.tomorrow_kwh:.1f} kWh")
+
+    return energy_details, battery_data, history_data, forecast_data
 
 
 def run_screen_cycle(display: Display, cycle: list) -> None:
@@ -189,8 +196,23 @@ def main():
     battery_detected = api.has_battery()
     logging.info(f"Battery detected: {battery_detected}")
 
+    # Detect forecast configuration
+    has_forecast = config.has_forecast_config()
+    forecast_api = None
+    if has_forecast:
+        forecast_api = ForecastSolarAPI(
+            lat=config.forecast_lat,
+            lon=config.forecast_lon,
+            tilt=config.forecast_tilt,
+            azimuth=config.forecast_azimuth,
+            kwp=config.forecast_kwp,
+        )
+        logging.info("Forecast enabled: Forecast.Solar API client initialized")
+    else:
+        logging.info("Forecast disabled: incomplete FORECAST_* configuration")
+
     # Build dynamic screen list
-    screens = get_screens(has_battery=battery_detected)
+    screens = get_screens(has_battery=battery_detected, has_forecast_config=has_forecast)
     screen_names = [name for _, _, name in screens]
     logging.info(f"Screen rotation: {', '.join(screen_names)}")
 
@@ -200,6 +222,7 @@ def main():
     last_successful_energy = None
     last_successful_battery = None
     last_successful_history = None
+    last_successful_forecast = None
     poll_interval_seconds = config.poll_interval * 60
     in_sleep = False
     next_poll = time.monotonic()  # Poll immediately on startup
@@ -229,7 +252,7 @@ def main():
 
             # Fetch data
             logging.info("Starting poll cycle")
-            energy_details, battery_data, history_data = fetch_data(api, has_battery=battery_detected)
+            energy_details, battery_data, history_data, forecast_data = fetch_data(api, has_battery=battery_detected, forecast_api=forecast_api)
 
             if energy_details is not None:
                 # Successful poll
@@ -239,6 +262,8 @@ def main():
                     last_successful_battery = battery_data
                 if history_data is not None:
                     last_successful_history = history_data
+                if forecast_data is not None:
+                    last_successful_forecast = forecast_data
                 logging.info(
                     f"Poll successful - Production: {energy_details.production:.2f} kWh, "
                     f"Consumption: {energy_details.consumption:.2f} kWh, "
@@ -255,6 +280,8 @@ def main():
                         cycle.append((render_fn, battery_data, name))
                     elif data_key == "history" and (history_data or last_successful_history):
                         cycle.append((render_fn, history_data or last_successful_history, name))
+                    elif data_key == "forecast" and forecast_data:
+                        cycle.append((render_fn, forecast_data, name))
 
                 run_screen_cycle(display, cycle)
 
@@ -284,6 +311,8 @@ def main():
                             stale_cycle.append((render_fn, last_successful_battery, name))
                         elif data_key == "history" and last_successful_history:
                             stale_cycle.append((render_fn, last_successful_history, name))
+                        elif data_key == "forecast" and last_successful_forecast:
+                            stale_cycle.append((render_fn, last_successful_forecast, name))
                     run_screen_cycle(display, stale_cycle)
 
             # Schedule next poll

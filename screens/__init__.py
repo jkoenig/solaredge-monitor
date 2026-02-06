@@ -14,7 +14,20 @@ SCREENS = [
 ]
 
 
-def get_screens(has_battery=False):
+def _placeholder_forecast_screen(data):
+    """Placeholder for forecast screen (implemented in Phase 8)."""
+    from PIL import Image, ImageDraw
+    from rendering.fonts import load_font
+    img = Image.new('1', (1000, 488), 1)
+    draw = ImageDraw.Draw(img)
+    font = load_font('Arial.ttf', 60)
+    draw.text((5, 5), "Prognose", fill=0, font=font)
+    draw.text((5, 80), f"{data.today_kwh:.1f} kWh heute", fill=0, font=load_font('Arial.ttf', 48))
+    draw.text((5, 140), f"{data.tomorrow_kwh:.1f} kWh morgen", fill=0, font=load_font('Arial.ttf', 48))
+    return img
+
+
+def get_screens(has_battery=False, has_forecast_config=False):
     """Build dynamic screen list based on system capabilities.
 
     Returns list of (render_fn, data_key, name) tuples where data_key
@@ -22,9 +35,11 @@ def get_screens(has_battery=False):
     - "energy": EnergyDetails
     - "battery": BatteryData
     - "history": EnergyHistory
+    - "forecast": ForecastData
 
     Args:
         has_battery: Whether the site has a battery installed
+        has_forecast_config: Whether all 5 FORECAST_* env vars are set
     """
     screens = [
         (render_production_screen, "energy", "Produktion"),
@@ -34,6 +49,8 @@ def get_screens(has_battery=False):
     ]
     if has_battery:
         screens.append((render_battery_screen, "battery", "Hausakku"))
+    if has_forecast_config:
+        screens.append((_placeholder_forecast_screen, "forecast", "Prognose"))
     screens.append((render_history_production_screen, "history", "Verlauf Produktion"))
     screens.append((render_history_consumption_screen, "history", "Verlauf Verbrauch"))
     return screens
