@@ -15,10 +15,10 @@
 
 ### Configuration (CFG)
 
-- [ ] **CFG-01**: All credentials loaded from environment variables or .env file (no hardcoded secrets)
-- [ ] **CFG-02**: Configuration validated at startup with clear error messages for missing values
-- [ ] **CFG-03**: .env.example file documenting all required environment variables
-- [ ] **CFG-04**: .gitignore updated to exclude .env files and other sensitive data
+- [x] **CFG-01**: All credentials loaded from environment variables or .env file (no hardcoded secrets)
+- [x] **CFG-02**: Configuration validated at startup with clear error messages for missing values
+- [x] **CFG-03**: .env.example file documenting all required environment variables
+- [x] **CFG-04**: .gitignore updated to exclude .env files and other sensitive data
 
 ### Data Sources (DATA)
 
@@ -90,10 +90,10 @@
 | CLN-03 | Phase 1 | Complete |
 | CLN-04 | Phase 1 | Complete |
 | CLN-05 | Phase 1 | Complete |
-| CFG-01 | Phase 2 | Pending |
-| CFG-02 | Phase 2 | Pending |
-| CFG-03 | Phase 2 | Pending |
-| CFG-04 | Phase 2 | Pending |
+| CFG-01 | Phase 2 | Complete |
+| CFG-02 | Phase 2 | Complete |
+| CFG-03 | Phase 2 | Complete |
+| CFG-04 | Phase 2 | Complete |
 | ARCH-01 | Phase 3 | Pending |
 | ARCH-02 | Phase 3 | Pending |
 | ARCH-03 | Phase 3 | Pending |
@@ -118,4 +118,4 @@
 | DEP-03 | Phase 6 | Pending |
 
 ---
-*Last updated: 2026-02-04*
+*Last updated: 2026-02-06*
