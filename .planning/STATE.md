@@ -11,18 +11,18 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Phase: 4 of 6 (Display Layer)
-Plan: 1 of 5 completed
+Plan: 2 of 5 completed
 Status: In progress
-Last activity: 2026-02-06 — Completed 04-01-PLAN.md (Rendering utilities)
+Last activity: 2026-02-06 — Completed 04-02-PLAN.md (Screen renderers)
 
-Progress: [███████░░░] 78% (7/9 plans)
+Progress: [████████░░] 89% (8/9 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
-- Average duration: 2.1 minutes
-- Total execution time: 0.25 hours
+- Total plans completed: 8
+- Average duration: 2.0 minutes
+- Total execution time: 0.28 hours
 
 **By Phase:**
 
@@ -31,11 +31,11 @@ Progress: [███████░░░] 78% (7/9 plans)
 | 01 | 2 | 8.8 min | 4.4 min |
 | 02 | 1 | 2.0 min | 2.0 min |
 | 03 | 3 | 4.0 min | 1.3 min |
-| 04 | 1 | 1.4 min | 1.4 min |
+| 04 | 2 | 3.4 min | 1.7 min |
 
 **Recent Trend:**
-- Last 5 plans: 1.0 min, 2.0 min, 1.0 min, 1.0 min, 1.4 min
-- Trend: Excellent (consistently sub-2 min)
+- Last 5 plans: 2.0 min, 1.0 min, 1.0 min, 1.4 min, 2.0 min
+- Trend: Excellent (consistently sub-2.5 min)
 
 *Updated after each plan completion*
 
@@ -65,6 +65,10 @@ Progress: [███████░░░] 78% (7/9 plans)
 - Phase 4: Font search chain: project fonts/ -> Raspberry Pi system fonts -> PIL default
 - Phase 4: Percentage text rendered to right of bar for clarity (avoids white-on-black complexity)
 - Phase 4: All drawing functions accept (draw, x, y, size) signature for consistency
+- Phase 4: Complex screens use 140px values with icon breakdowns; simple screens use 180px centered values
+- Phase 4: Bar percentage maxes: 20 kWh (production), 15 kWh (consumption), 10 kWh (feed-in/purchased)
+- Phase 4: Battery energy calculated as delta from production/consumption/self-consumption/purchased/feed-in
+- Phase 4: Unit text baseline-aligned to right of main values for professional typography
 
 ### Pending Todos
 
@@ -77,7 +81,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 04-01-PLAN.md (Rendering utilities) — Phase 4 plan 1 of 5
+Stopped at: Completed 04-02-PLAN.md (Screen renderers) — Phase 4 plan 2 of 5
 Resume file: None
 
 ---
