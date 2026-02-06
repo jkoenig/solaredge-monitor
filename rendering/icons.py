@@ -46,8 +46,8 @@ def draw_house_icon(draw: ImageDraw.Draw, x: int, y: int, size: int) -> None:
         y: Top coordinate of icon bounding box
         size: Width and height of icon bounding box
     """
-    # Triangle roof (top 40% of size)
-    roof_height = int(size * 0.4)
+    # Triangle roof (top 38% of size, leaving gap before body)
+    roof_height = int(size * 0.38)
     roof_points = [
         (x + size // 2, y),  # Top center
         (x, y + roof_height),  # Bottom left
@@ -55,15 +55,16 @@ def draw_house_icon(draw: ImageDraw.Draw, x: int, y: int, size: int) -> None:
     ]
     draw.polygon(roof_points, outline=0, width=6)
 
-    # Rectangle body (bottom 60% of size)
-    body_y = y + roof_height
+    # Rectangle body (offset down by 5px to create gap from roof)
+    body_y = y + roof_height + 5
     body_bbox = [x + size // 6, body_y, x + size - size // 6, y + size]
     draw.rectangle(body_bbox, outline=0, width=6)
 
 
 def draw_grid_icon(draw: ImageDraw.Draw, x: int, y: int, size: int) -> None:
     """
-    Draw a power pylon icon: transmission tower silhouette.
+    Draw a power pylon icon: simplified transmission tower with vertical body,
+    angled legs, and crossarms.
 
     Args:
         draw: PIL ImageDraw instance
@@ -73,39 +74,32 @@ def draw_grid_icon(draw: ImageDraw.Draw, x: int, y: int, size: int) -> None:
     """
     center_x = x + size // 2
 
-    # Bottom legs (angled outward)
-    bottom_width = int(size * 0.9)
-    leg_bottom_left = x + (size - bottom_width) // 2
-    leg_bottom_right = leg_bottom_left + bottom_width
+    # Vertical tower body (center line from top to 70% down)
+    tower_top_y = y + int(size * 0.1)
+    tower_bottom_y = y + int(size * 0.7)
+    draw.line([(center_x, tower_top_y), (center_x, tower_bottom_y)], fill=0, width=6)
 
-    # Waist (narrow middle)
-    waist_y = y + int(size * 0.6)
-    waist_width = int(size * 0.25)
-    waist_left = center_x - waist_width // 2
-    waist_right = center_x + waist_width // 2
+    # Two angled legs at bottom (splayed outward)
+    leg_spread = int(size * 0.4)
+    left_leg_bottom = center_x - leg_spread
+    right_leg_bottom = center_x + leg_spread
+    bottom_y = y + size
+    draw.line([(center_x, tower_bottom_y), (left_leg_bottom, bottom_y)], fill=0, width=6)
+    draw.line([(center_x, tower_bottom_y), (right_leg_bottom, bottom_y)], fill=0, width=6)
 
-    # Top (wider top section)
-    top_y = y + int(size * 0.2)
-    top_width = int(size * 0.6)
-    top_left = center_x - top_width // 2
-    top_right = center_x + top_width // 2
-
-    # Draw pylon body as polygon
-    pylon_points = [
-        (leg_bottom_left, y + size),  # Bottom left leg
-        (waist_left, waist_y),        # Left side of waist
-        (top_left, top_y),            # Left side of top
-        (top_right, top_y),           # Right side of top
-        (waist_right, waist_y),       # Right side of waist
-        (leg_bottom_right, y + size), # Bottom right leg
-    ]
-    draw.polygon(pylon_points, outline=0, width=5)
-
-    # Draw crossarm at top (horizontal line)
-    crossarm_y = y + int(size * 0.15)
-    crossarm_left = x + int(size * 0.1)
-    crossarm_right = x + int(size * 0.9)
+    # Upper crossarm (horizontal)
+    crossarm_y = y + int(size * 0.2)
+    crossarm_width = int(size * 0.7)
+    crossarm_left = center_x - crossarm_width // 2
+    crossarm_right = center_x + crossarm_width // 2
     draw.line([(crossarm_left, crossarm_y), (crossarm_right, crossarm_y)], fill=0, width=5)
+
+    # Lower crossarm (horizontal, shorter)
+    crossarm2_y = y + int(size * 0.45)
+    crossarm2_width = int(size * 0.5)
+    crossarm2_left = center_x - crossarm2_width // 2
+    crossarm2_right = center_x + crossarm2_width // 2
+    draw.line([(crossarm2_left, crossarm2_y), (crossarm2_right, crossarm2_y)], fill=0, width=5)
 
 
 def draw_sun_icon(draw: ImageDraw.Draw, x: int, y: int, size: int) -> None:

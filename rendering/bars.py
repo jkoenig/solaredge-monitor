@@ -11,6 +11,7 @@ from PIL import ImageDraw
 def draw_horizontal_bar(draw: ImageDraw.Draw, bbox: tuple, percentage: float, font, label: str = "") -> None:
     """
     Draw a horizontal bar chart with percentage fill and text label.
+    Label text is positioned ABOVE the bar to avoid right-edge truncation.
 
     Args:
         draw: PIL ImageDraw instance
@@ -20,6 +21,18 @@ def draw_horizontal_bar(draw: ImageDraw.Draw, bbox: tuple, percentage: float, fo
         label: Optional label to prefix before percentage (e.g., "Eigenverbrauch")
     """
     x0, y0, x1, y1 = bbox
+
+    # Draw percentage text ABOVE the bar (left-aligned at bar x0)
+    if label:
+        percentage_text = f"{label} {int(percentage)}%"
+    else:
+        percentage_text = f"{int(percentage)}%"
+
+    # Position text above bar with small gap
+    text_bbox = draw.textbbox((x0, 0), percentage_text, font=font)
+    text_height = text_bbox[3] - text_bbox[1]
+    text_y = y0 - text_height - 5  # 5px gap above bar
+    draw.text((x0, text_y), percentage_text, fill=0, font=font)
 
     # Draw outline rectangle
     draw.rectangle(bbox, outline=0, width=4)
@@ -35,18 +48,3 @@ def draw_horizontal_bar(draw: ImageDraw.Draw, bbox: tuple, percentage: float, fo
     if fill_width > 0:
         fill_bbox = [x0, y0, x0 + fill_width, y1]
         draw.rectangle(fill_bbox, fill=0)
-
-    # Draw percentage text to the right of the bar
-    if label:
-        percentage_text = f"{label} {int(percentage)}%"
-    else:
-        percentage_text = f"{int(percentage)}%"
-    text_x = x1 + 15
-
-    # Calculate vertical centering for text
-    text_bbox = draw.textbbox((text_x, y0), percentage_text, font=font)
-    text_height = text_bbox[3] - text_bbox[1]
-    bar_height = y1 - y0
-    text_y = y0 + (bar_height - text_height) // 2
-
-    draw.text((text_x, text_y), percentage_text, fill=0, font=font)

@@ -25,30 +25,31 @@ def render_purchased_screen(data: EnergyDetails) -> Image:
     img = Image.new('1', (1000, 488), 1)
     draw = ImageDraw.Draw(img)
 
-    # Load fonts (same sizes as feed_in for consistency)
-    label_font = load_font('Arial.ttf', 64)
-    value_font = load_font('ArialBlack.ttf', 180)
-    unit_font = load_font('Arial.ttf', 56)
-    bar_font = load_font('Arial.ttf', 36)
+    # Load fonts (large but sized to ensure bar label fits above bar)
+    label_font = load_font('Arial.ttf', 56)
+    value_font = load_font('ArialBlack.ttf', 160)
+    unit_font = load_font('Arial.ttf', 48)
+    bar_font = load_font('Arial.ttf', 32)
 
-    # Calculate vertical centering
-    total_content_height = 320  # Approximate
-    start_y = (488 - total_content_height) // 2
-
+    # TOP-ALIGNED layout (no vertical centering)
     # "Bezug" label
     label_text = "Bezug"
     label_bbox = draw.textbbox((0, 0), label_text, font=label_font)
     label_width = label_bbox[2] - label_bbox[0]
     label_x = (1000 - label_width) // 2  # Center horizontally
-    label_y = start_y
+    label_y = 30
     draw.text((label_x, label_y), label_text, fill=0, font=label_font)
 
-    # Main kWh value (extra large)
+    # Measure label to position value below
+    label_measured = draw.textbbox((label_x, label_y), label_text, font=label_font)
+    label_bottom = label_measured[3]
+
+    # Main kWh value (extra large) - positioned below label
     value_text = f"{data.purchased:.1f}"
     value_bbox = draw.textbbox((0, 0), value_text, font=value_font)
     value_width = value_bbox[2] - value_bbox[0]
     value_height = value_bbox[3] - value_bbox[1]
-    value_y = label_y + 90
+    value_y = label_bottom + 20
 
     # "kWh" unit text to the right, baseline-aligned
     unit_text = "kWh"
@@ -65,9 +66,11 @@ def render_purchased_screen(data: EnergyDetails) -> Image:
     draw.text((value_x, value_y), value_text, fill=0, font=value_font)
     draw.text((unit_x, unit_y), unit_text, fill=0, font=unit_font)
 
-    # Horizontal bar showing purchased as percentage of consumption
-    bar_y = value_y + value_height + 60
-    bar_bbox = (100, bar_y, 850, bar_y + 50)
+    # Horizontal bar - positioned below value with room for label above bar
+    value_bottom = value_y + value_height
+    bar_label_y = value_bottom + 40  # Space for bar label text above bar
+    bar_y = bar_label_y + 5  # Small gap between label and bar top
+    bar_bbox = (100, bar_y, 850, bar_y + 40)
     percentage = min(100.0, (data.purchased / data.consumption) * 100.0) if data.consumption > 0 else 0.0
     draw_horizontal_bar(draw, bar_bbox, percentage, bar_font, label="Anteil Verbrauch")
 
