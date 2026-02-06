@@ -6,23 +6,23 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 **Core value:** Show the homeowner their solar energy state at a glance — production, battery, grid, consumption — on a physical e-ink display that's always up to date.
 
-**Current focus:** Phase 5 complete — Operations
+**Current focus:** Phase 6 in progress — Deployment
 
 ## Current Position
 
-Phase: 5 of 6 (Operations)
+Phase: 6 of 6 (Deployment)
 Plan: 2 of 2 completed
 Status: Phase complete
-Last activity: 2026-02-06 — Completed 05-02-PLAN.md (Production polling loop)
+Last activity: 2026-02-06 — Completed 06-02-PLAN.md (Documentation and git configuration)
 
-Progress: [██████████] 100% (11/11 plans)
+Progress: [████████████] 100% (13/13 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 11
-- Average duration: 1.9 minutes
-- Total execution time: 0.36 hours
+- Total plans completed: 13
+- Average duration: 1.8 minutes
+- Total execution time: 0.41 hours
 
 **By Phase:**
 
@@ -33,9 +33,10 @@ Progress: [██████████] 100% (11/11 plans)
 | 03 | 3 | 4.0 min | 1.3 min |
 | 04 | 3 | 5.4 min | 1.8 min |
 | 05 | 2 | 3.2 min | 1.6 min |
+| 06 | 2 | 2.5 min | 1.3 min |
 
 **Recent Trend:**
-- Last 5 plans: 1.4 min, 2.0 min, 2.0 min, 2.0 min, 1.2 min
+- Last 5 plans: 2.0 min, 2.0 min, 1.2 min, 1.2 min, 1.3 min
 - Trend: Excellent (consistently sub-2.5 min)
 
 *Updated after each plan completion*
@@ -82,6 +83,16 @@ Progress: [██████████] 100% (11/11 plans)
 - Phase 5: Sleep mode uses try/finally to guarantee display cleanup even on crashes
 - Phase 5: Hardcode Europe/Berlin timezone per research recommendation
 - Phase 5: Screen cycle holds on Produktion between polls (not continuous cycling)
+- Phase 6: Restart=always for all exit codes (auto-recovery on crashes)
+- Phase 6: RestartSec=10 with rate limiting (5 starts in 200s) per systemd best practices
+- Phase 6: Absolute venv path in ExecStart (no activation needed)
+- Phase 6: Journal logging via StandardOutput/StandardError (works with existing dual logging)
+- Phase 6: User=pi for GPIO/SPI access (default Raspberry Pi groups)
+- Phase 6: Idempotent install.sh checks (preserves .env, detects existing venv/SPI)
+- Phase 6: Root user refusal in both scripts (must run as pi user)
+- Phase 6: .gitignore now excludes .planning/ directory (development tooling, not for public repo)
+- Phase 6: README uses English documentation despite German UI labels on screens
+- Phase 6: README emphasizes install.sh for initial setup and deploy.sh for updates
 
 ### Pending Todos
 
@@ -94,7 +105,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 05-02-PLAN.md (Production polling loop) - Phase 5 complete
+Stopped at: Completed 06-02-PLAN.md (Documentation and git configuration) - Phase 6 complete
 Resume file: None
 
 ---
