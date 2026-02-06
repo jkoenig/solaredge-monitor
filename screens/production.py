@@ -3,18 +3,17 @@ Produktion screen renderer.
 
 Shows total production with breakdown of where the energy went:
 - Eigenverbrauch (self-consumed)
-- Batterie (stored)
-- Netz (fed to grid)
+- In Akku (stored)
+- Ins Netz (fed to grid)
 """
 
 from PIL import Image, ImageDraw
 from models import EnergyDetails
 from rendering.fonts import load_font
-from rendering.icons import draw_house_icon, draw_battery_icon, draw_grid_icon
 from rendering.bars import draw_horizontal_bar
 
 # Unified layout constants (shared across all screens)
-MARGIN = 15
+MARGIN = 5
 CANVAS_W, CANVAS_H = 1000, 488
 
 
@@ -32,12 +31,12 @@ def render_production_screen(data: EnergyDetails) -> Image:
     draw = ImageDraw.Draw(img)
 
     # Fonts (unified across all screens)
-    label_font = load_font('Arial.ttf', 48)
+    label_font = load_font('Arial.ttf', 60)
     value_font = load_font('ArialBlack.ttf', 120)
-    unit_font = load_font('Arial.ttf', 40)
-    breakdown_label_font = load_font('Arial.ttf', 28)
-    breakdown_value_font = load_font('Arial.ttf', 36)
-    bar_font = load_font('Arial.ttf', 28)
+    unit_font = load_font('Arial.ttf', 64)
+    breakdown_label_font = load_font('Arial.ttf', 40)
+    breakdown_value_font = load_font('Arial.ttf', 48)
+    bar_font = load_font('Arial.ttf', 44)
 
     # --- HEADLINE: top-left ---
     label_text = "Produktion"
@@ -46,15 +45,15 @@ def render_production_screen(data: EnergyDetails) -> Image:
     label_bottom = label_bbox[3]
 
     # --- 3-COLUMN BREAKDOWN: sticky to bottom ---
-    # icon(50) + gap(8) + label(~28) + gap(8) + value(~36) = ~130px
-    breakdown_y_start = CANVAS_H - MARGIN - 130
+    # label(~40) + gap(8) + value(~48) = ~100px
+    breakdown_y_start = CANVAS_H - MARGIN - 100
 
     # --- VALUE+BAR GROUP: vertically centered between headline and breakdown ---
     value_text = f"{data.production:.1f}"
     value_measure = draw.textbbox((0, 0), value_text, font=value_font)
     value_h = value_measure[3]  # distance from draw position to visual bottom
 
-    bar_h = 30
+    bar_h = 40
     gap_value_bar = 20
     gap_bar_label = 5
     bar_label_text = "Eigenverbrauch 100%"
@@ -79,25 +78,22 @@ def render_production_screen(data: EnergyDetails) -> Image:
     bar_bbox = (MARGIN, bar_y, CANVAS_W - MARGIN, bar_y + bar_h)
     percentage = min(100.0, (data.self_consumption / data.production) * 100.0) if data.production > 0 else 0.0
     draw_horizontal_bar(draw, bar_bbox, percentage, bar_font, label="Eigenverbrauch")
-    icon_size = 50
+
     content_width = CANVAS_W - 2 * MARGIN
     column_width = content_width // 3
 
     battery_energy = max(0.0, data.production - data.self_consumption - data.feed_in)
 
-    # Column 1: House icon + "Eigenverbrauch" + self_consumption value
+    # Column 1: "Eigenverbrauch" + self_consumption value
     col1_x = MARGIN + column_width // 2
-    icon_x1 = col1_x - icon_size // 2
-    draw_house_icon(draw, icon_x1, breakdown_y_start, icon_size)
 
     label1 = "Eigenverbrauch"
     label1_bbox = draw.textbbox((0, 0), label1, font=breakdown_label_font)
     label1_width = label1_bbox[2] - label1_bbox[0]
     label1_x = col1_x - label1_width // 2
-    label1_y = breakdown_y_start + icon_size + 8
-    draw.text((label1_x, label1_y), label1, fill=0, font=breakdown_label_font)
+    draw.text((label1_x, breakdown_y_start), label1, fill=0, font=breakdown_label_font)
 
-    label1_measured = draw.textbbox((label1_x, label1_y), label1, font=breakdown_label_font)
+    label1_measured = draw.textbbox((label1_x, breakdown_y_start), label1, font=breakdown_label_font)
     label1_bottom = label1_measured[3]
 
     value1 = f"{data.self_consumption:.1f} kWh"
@@ -107,19 +103,16 @@ def render_production_screen(data: EnergyDetails) -> Image:
     value1_y = label1_bottom + 8
     draw.text((value1_x, value1_y), value1, fill=0, font=breakdown_value_font)
 
-    # Column 2: Battery icon + "In Batterie" + battery energy
+    # Column 2: "In Akku" + battery energy
     col2_x = MARGIN + column_width + column_width // 2
-    icon_x2 = col2_x - icon_size // 2
-    draw_battery_icon(draw, icon_x2, breakdown_y_start, icon_size)
 
-    label2 = "In Batterie"
+    label2 = "In Akku"
     label2_bbox = draw.textbbox((0, 0), label2, font=breakdown_label_font)
     label2_width = label2_bbox[2] - label2_bbox[0]
     label2_x = col2_x - label2_width // 2
-    label2_y = breakdown_y_start + icon_size + 8
-    draw.text((label2_x, label2_y), label2, fill=0, font=breakdown_label_font)
+    draw.text((label2_x, breakdown_y_start), label2, fill=0, font=breakdown_label_font)
 
-    label2_measured = draw.textbbox((label2_x, label2_y), label2, font=breakdown_label_font)
+    label2_measured = draw.textbbox((label2_x, breakdown_y_start), label2, font=breakdown_label_font)
     label2_bottom = label2_measured[3]
 
     value2 = f"{battery_energy:.1f} kWh"
@@ -129,19 +122,16 @@ def render_production_screen(data: EnergyDetails) -> Image:
     value2_y = label2_bottom + 8
     draw.text((value2_x, value2_y), value2, fill=0, font=breakdown_value_font)
 
-    # Column 3: Grid icon + "Ins Netz" + feed_in value
+    # Column 3: "Ins Netz" + feed_in value
     col3_x = MARGIN + 2 * column_width + column_width // 2
-    icon_x3 = col3_x - icon_size // 2
-    draw_grid_icon(draw, icon_x3, breakdown_y_start, icon_size)
 
     label3 = "Ins Netz"
     label3_bbox = draw.textbbox((0, 0), label3, font=breakdown_label_font)
     label3_width = label3_bbox[2] - label3_bbox[0]
     label3_x = col3_x - label3_width // 2
-    label3_y = breakdown_y_start + icon_size + 8
-    draw.text((label3_x, label3_y), label3, fill=0, font=breakdown_label_font)
+    draw.text((label3_x, breakdown_y_start), label3, fill=0, font=breakdown_label_font)
 
-    label3_measured = draw.textbbox((label3_x, label3_y), label3, font=breakdown_label_font)
+    label3_measured = draw.textbbox((label3_x, breakdown_y_start), label3, font=breakdown_label_font)
     label3_bottom = label3_measured[3]
 
     value3 = f"{data.feed_in:.1f} kWh"

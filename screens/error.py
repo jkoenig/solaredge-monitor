@@ -11,7 +11,7 @@ from rendering.fonts import load_font
 # Canvas and layout constants (matching other screens)
 CANVAS_W = 1000
 CANVAS_H = 488
-MARGIN = 15
+MARGIN = 5
 
 
 def render_error_screen(message: str = "API nicht erreichbar") -> Image.Image:
@@ -28,7 +28,7 @@ def render_error_screen(message: str = "API nicht erreichbar") -> Image.Image:
     draw = ImageDraw.Draw(img)
 
     # Draw headline "Fehler" at top-left
-    headline_font = load_font("Arial.ttf", 48)
+    headline_font = load_font("Arial.ttf", 60)
     headline_text = "Fehler"
     draw.text((MARGIN, MARGIN), headline_text, font=headline_font, fill=0)
 
@@ -37,7 +37,7 @@ def render_error_screen(message: str = "API nicht erreichbar") -> Image.Image:
     headline_bottom = headline_bbox[3]
 
     # Center the error message in the remaining area
-    message_font = load_font("Arial.ttf", 36)
+    message_font = load_font("Arial.ttf", 48)
     message_bbox = draw.textbbox((0, 0), message, font=message_font)
     message_width = message_bbox[2] - message_bbox[0]
     message_height = message_bbox[3] - message_bbox[1]
