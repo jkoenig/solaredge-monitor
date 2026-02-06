@@ -8,10 +8,10 @@
 
 ### Architecture (ARCH)
 
-- [ ] **ARCH-01**: Application split into separate modules: config, API clients, display rendering, main loop
-- [ ] **ARCH-02**: No circular dependencies between modules — clear dependency flow: config → API → models → display → main
-- [ ] **ARCH-03**: Each module importable and testable independently
-- [ ] **ARCH-04**: Hardware abstraction layer — mock display for development without physical e-ink
+- [x] **ARCH-01**: Application split into separate modules: config, API clients, display rendering, main loop
+- [x] **ARCH-02**: No circular dependencies between modules — clear dependency flow: config → API → models → display → main
+- [x] **ARCH-03**: Each module importable and testable independently
+- [x] **ARCH-04**: Hardware abstraction layer — mock display for development without physical e-ink
 
 ### Configuration (CFG)
 
@@ -22,11 +22,11 @@
 
 ### Data Sources (DATA)
 
-- [ ] **DATA-01**: SolarEdge API client fetches current power flow (grid, load, PV, storage, off-grid state)
-- [ ] **DATA-02**: SolarEdge API client fetches site overview (daily energy, lifetime stats)
-- [ ] **DATA-03**: SolarEdge API client fetches energy details (consumption, production, feed-in, purchased)
-- [ ] **DATA-04**: API client handles errors gracefully — returns None/defaults on failure, never crashes
-- [ ] **DATA-05**: API responses use typed data models (dataclasses or similar) instead of raw lists/tuples
+- [x] **DATA-01**: SolarEdge API client fetches current power flow (grid, load, PV, storage, off-grid state)
+- [x] **DATA-02**: SolarEdge API client fetches site overview (daily energy, lifetime stats)
+- [x] **DATA-03**: SolarEdge API client fetches energy details (consumption, production, feed-in, purchased)
+- [x] **DATA-04**: API client handles errors gracefully — returns None/defaults on failure, never crashes
+- [x] **DATA-05**: API responses use typed data models (dataclasses or similar) instead of raw lists/tuples
 
 ### Cleanup (CLN)
 
@@ -94,15 +94,15 @@
 | CFG-02 | Phase 2 | Complete |
 | CFG-03 | Phase 2 | Complete |
 | CFG-04 | Phase 2 | Complete |
-| ARCH-01 | Phase 3 | Pending |
-| ARCH-02 | Phase 3 | Pending |
-| ARCH-03 | Phase 3 | Pending |
-| ARCH-04 | Phase 3 | Pending |
-| DATA-01 | Phase 3 | Pending |
-| DATA-02 | Phase 3 | Pending |
-| DATA-03 | Phase 3 | Pending |
-| DATA-04 | Phase 3 | Pending |
-| DATA-05 | Phase 3 | Pending |
+| ARCH-01 | Phase 3 | Complete |
+| ARCH-02 | Phase 3 | Complete |
+| ARCH-03 | Phase 3 | Complete |
+| ARCH-04 | Phase 3 | Complete |
+| DATA-01 | Phase 3 | Complete |
+| DATA-02 | Phase 3 | Complete |
+| DATA-03 | Phase 3 | Complete |
+| DATA-04 | Phase 3 | Complete |
+| DATA-05 | Phase 3 | Complete |
 | DISP-01 | Phase 4 | Pending |
 | DISP-02 | Phase 4 | Pending |
 | DISP-03 | Phase 4 | Pending |
