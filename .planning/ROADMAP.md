@@ -68,7 +68,7 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 09-01-PLAN.md — README updates with forecast config, screenshot, and project structure
+- [x] 09-01-PLAN.md — README updates with forecast config, screenshot, and project structure
 
 ## Progress
 
@@ -80,9 +80,9 @@ Phases execute in numeric order: 7 → 8 → 9
 | 1-6. MVP | v1.0 | 13/13 | Complete | 2026-02-07 |
 | 7. Forecast API Integration | v1.1 | 2/2 | Complete | 2026-02-07 |
 | 8. Forecast Screen | v1.1 | 1/1 | Complete | 2026-02-07 |
-| 9. Documentation | v1.1 | 0/TBD | Not started | - |
+| 9. Documentation | v1.1 | 1/1 | Complete | 2026-02-11 |
 
 ---
 
 *Roadmap created: 2026-02-07*
-*Last updated: 2026-02-07 (Phase 8 complete)*
+*Last updated: 2026-02-11 (Phase 9 complete — v1.1 milestone complete)*
