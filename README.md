@@ -1,8 +1,8 @@
 # SolarEdge Off-Grid Monitor
 
-A Raspberry Pi-powered e-ink display that shows your SolarEdge solar energy data at a glance — production, consumption, grid feed-in, purchased energy, battery state, and 2-week history.
+A Raspberry Pi-powered e-ink display that shows your SolarEdge solar energy data at a glance — production, consumption, grid feed-in, purchased energy, battery state, solar forecast, and 2-week history.
 
-The display cycles through up to 7 screens, each showing a daily energy metric with a proportional bar and breakdown, plus two 14-day histogram screens. The battery screen is auto-detected at startup and only shown when a battery is installed. Updates every 5 minutes. Sleeps at night. Runs as a systemd service on your Pi.
+The display cycles through up to 9 screens, each showing a daily energy metric with a proportional bar and breakdown, plus a solar forecast screen powered by Forecast.Solar, and two 14-day histogram screens. The battery and forecast screens are optional — battery is auto-detected at startup, forecast is enabled when configured. Updates every 5 minutes. Sleeps at night. Runs as a systemd service on your Pi.
 
 ## Screens
 
@@ -15,6 +15,8 @@ The display cycles through up to 7 screens, each showing a daily energy metric w
 | ![Hausakku Laden](docs/screen-hausakku-charging.png) | ![Hausakku Entladen](docs/screen-hausakku-discharging.png) |
 | **Verlauf Produktion** | **Verlauf Verbrauch** |
 | ![Verlauf Produktion](docs/screen-verlauf-produktion.png) | ![Verlauf Verbrauch](docs/screen-verlauf-verbrauch.png) |
+| **Prognose** | |
+| ![Prognose](docs/screen-prognose.png) | |
 
 ## Hardware
 
@@ -30,9 +32,9 @@ Total: ~CHF 49
 ## How It Works
 
 1. **Fetches energy data** from the SolarEdge monitoring API every 5 minutes
-2. **Renders 4 screens** at 4x resolution (1000x488) using PIL for high-quality output
+2. **Renders screens** at 4x resolution (1000x488) using PIL for high-quality output
 3. **Downsamples to 250x122** with LANCZOS resampling for crisp e-ink text
-4. **Cycles through screens** on the display (Production → Consumption → Feed-in → Purchased → Battery if installed → History)
+4. **Cycles through screens** on the display (Production → Consumption → Feed-in → Purchased → Battery if installed → Forecast if configured → History)
 5. **Sleeps between midnight and 6 AM** when there's no solar production
 
 ## Prerequisites
@@ -86,6 +88,14 @@ Copy `.env.example` to `.env` and configure:
 | `SOLAREDGE_SLEEP_END` | No | `6` | Hour to resume polling (0-23, 6 = 6 AM) |
 | `SOLAREDGE_DEBUG` | No | `false` | Enable debug mode (saves PNG files instead of using display) |
 | `SOLAREDGE_LOG_LEVEL` | No | `INFO` | Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL |
+| | | | **Solar Forecast** (optional) |
+| `FORECAST_LAT` | No | — | Latitude of solar installation (-90 to 90) |
+| `FORECAST_LON` | No | — | Longitude of solar installation (-180 to 180) |
+| `FORECAST_TILT` | No | — | Panel tilt angle in degrees (0 = horizontal, 90 = vertical) |
+| `FORECAST_AZIMUTH` | No | — | Panel orientation in degrees (-180 to 180, 0 = south, -90 = east, 90 = west) |
+| `FORECAST_KWP` | No | — | Installed peak power in kilowatt-peak (kWp) |
+
+**Note:** The forecast screen uses the free [Forecast.Solar](https://forecast.solar) API (no API key required). All 5 forecast variables must be set to enable the forecast screen.
 
 Example `.env`:
 
@@ -97,6 +107,13 @@ SOLAREDGE_SLEEP_START=0
 SOLAREDGE_SLEEP_END=6
 SOLAREDGE_DEBUG=false
 SOLAREDGE_LOG_LEVEL=INFO
+
+# Solar Forecast (optional — uncomment and fill to enable)
+# FORECAST_LAT=48.1351
+# FORECAST_LON=11.5820
+# FORECAST_TILT=30
+# FORECAST_AZIMUTH=0
+# FORECAST_KWP=9.8
 ```
 
 ## Development (without hardware)
@@ -237,8 +254,9 @@ SolarEdge has rate limits on their API. If you see 429 errors in logs:
 ├── main.py                    # Entry point — polling loop and screen cycling
 ├── config.py                  # Environment-based configuration
 ├── solaredge_api.py           # SolarEdge API client with retry logic
-├── models.py                  # Data models (PowerFlow, EnergyDetails, EnergyHistory, SiteOverview, BatteryData)
+├── models.py                  # Data models (PowerFlow, EnergyDetails, EnergyHistory, SiteOverview, BatteryData, ForecastData)
 ├── display.py                 # Display abstraction (e-ink / PNG debug mode)
+├── forecast_api.py            # Forecast.Solar API client with TTL caching
 ├── logging_setup.py           # JSON logging configuration (stdout + rotating file)
 ├── screens/                   # Screen renderers (one per display screen)
 │   ├── __init__.py           # Screen registry
@@ -247,6 +265,7 @@ SolarEdge has rate limits on their API. If you see 429 errors in logs:
 │   ├── feed_in.py            # Einspeisung — grid feed-in
 │   ├── purchased.py          # Bezug — grid purchase
 │   ├── battery.py            # Hausakku — battery state (auto-detected)
+│   ├── forecast.py           # Prognose — solar production forecast
 │   ├── history.py            # Verlauf — 14-day production/consumption histograms
 │   └── error.py              # Error screen (API failures)
 ├── rendering/                 # Drawing primitives (fonts, icons, bars)
