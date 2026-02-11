@@ -55,7 +55,7 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 08-01-PLAN.md — Forecast screen renderer with model wiring and screen registration
+- [x] 08-01-PLAN.md — Forecast screen renderer with model wiring and screen registration
 
 #### Phase 9: Documentation
 **Goal**: Documentation reflects new forecast screen configuration and usage
@@ -65,9 +65,10 @@ Plans:
   1. User can see forecast configuration instructions in README with all 5 required .env variables
   2. User can copy forecast environment variables from .env.example as a template
   3. README includes screenshot of "Prognose, heute" screen showing how forecast appears
-**Plans**: TBD
+**Plans:** 1 plan
 
-Plans: (TBD)
+Plans:
+- [ ] 09-01-PLAN.md — README updates with forecast config, screenshot, and project structure
 
 ## Progress
 
@@ -78,10 +79,10 @@ Phases execute in numeric order: 7 → 8 → 9
 |-------|-----------|----------------|--------|-----------|
 | 1-6. MVP | v1.0 | 13/13 | Complete | 2026-02-07 |
 | 7. Forecast API Integration | v1.1 | 2/2 | Complete | 2026-02-07 |
-| 8. Forecast Screen | v1.1 | 0/1 | Not started | - |
+| 8. Forecast Screen | v1.1 | 1/1 | Complete | 2026-02-07 |
 | 9. Documentation | v1.1 | 0/TBD | Not started | - |
 
 ---
 
 *Roadmap created: 2026-02-07*
-*Last updated: 2026-02-07 (Phase 7 complete)*
+*Last updated: 2026-02-07 (Phase 8 complete)*
