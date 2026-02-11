@@ -2,20 +2,19 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-07)
+See: .planning/PROJECT.md (updated 2026-02-11)
 
 **Core value:** Show the homeowner their solar energy state at a glance on a physical e-ink display that's always up to date.
-
-**Current focus:** v1.1 Forecast Screen - Phase 9: Documentation
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 9 of 9 (Documentation) — COMPLETE
-Plan: 1 of 1 in current phase
-Status: Phase complete, verified ✓
-Last activity: 2026-02-11 - Completed 09-01-PLAN.md (forecast documentation)
+Phase: 9 of 9 — all milestones complete
+Plan: N/A
+Status: v1.1 shipped, awaiting next milestone
+Last activity: 2026-02-11 - Completed v1.1 Forecast Screen milestone
 
-Progress: [██████████] 100% (17/17 estimated total plans)
+Progress: [██████████] 100% (17/17 plans across v1.0 + v1.1)
 
 ## Performance Metrics
 
@@ -24,31 +23,13 @@ Progress: [██████████] 100% (17/17 estimated total plans)
 - Average duration: 1.9 minutes
 - Total execution time: 0.55 hours (33 minutes)
 
-**Baseline established:** v1.0 MVP shipped with consistent 1-2 minute plan execution. v1.1 maintaining velocity.
+**Baseline established:** v1.0 MVP shipped with consistent 1-2 minute plan execution. v1.1 maintained velocity.
 
 ## Accumulated Context
 
 ### Decisions
 
 See PROJECT.md Key Decisions table for full list.
-
-Recent decisions affecting v1.1:
-- v1.1 adds Forecast.Solar API integration (free tier, 12 req/hour)
-- Forecast screen is optional - only shown when all 5 .env values configured
-- Caching required (1 hour) to stay within rate limits
-- Forecast config is fully optional - app starts normally when absent (07-01)
-- All 5 forecast parameters required to enable feature - atomic activation (07-01)
-- Invalid forecast values logged as warnings, set to None - graceful degradation (07-01)
-- Range validation for tilt (0-90) and azimuth (-180 to 180) catches common errors (07-01)
-- TTL cache caches None results to prevent hammering when rate-limited (07-02)
-- Simple requests.get() without session/retry - cache is the retry strategy (07-02)
-- Placeholder forecast screen for Phase 7, real screen design in Phase 8 (07-02)
-- Forecast appears after battery but before history in screen rotation (07-02)
-- Use manual bar drawing (not draw_horizontal_bar) for custom legend and overflow indicator (08-01)
-- Overflow indicator as white notch at right end of bar (visible on 1-bit display) (08-01)
-- Pass actual_production through ForecastData for cleaner API (08-01)
-- [Phase 09-01]: Screenshot generated at 250x122 with LANCZOS downsampling (matching display pipeline)
-- [Phase 09-01]: .env.example already contained all forecast variables (added in Phase 7, verified unchanged)
 
 ### Pending Todos
 
@@ -61,7 +42,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Phase 9 complete, v1.1 documentation complete
+Stopped at: v1.1 milestone complete
 Resume file: None
 
 ---
