@@ -32,11 +32,11 @@
 <details>
 <summary>✅ v1.2 Forecast Fix (Phase 10) — SHIPPED 2026-02-12</summary>
 
-- [x] Phase 10: Forecast Fix (1/1 plan, 1 gap closure plan)
+- [x] Phase 10: Forecast Fix (2/2 plans) — completed 2026-02-12
 
 Plans:
 - [x] 10-01-PLAN.md — Fix API parsing and forecast screen layout
-- [ ] 10-02-PLAN.md — Regenerate docs screenshot at correct resolution (gap closure)
+- [x] 10-02-PLAN.md — Regenerate docs screenshot at correct resolution (gap closure)
 
 </details>
 
@@ -48,9 +48,9 @@ Plans:
 | 7. Forecast API Integration | v1.1 | 2/2 | Complete | 2026-02-07 |
 | 8. Forecast Screen | v1.1 | 1/1 | Complete | 2026-02-07 |
 | 9. Documentation | v1.1 | 1/1 | Complete | 2026-02-11 |
-| 10. Forecast Fix | v1.2 | 1/2 | Gap closure | 2026-02-12 |
+| 10. Forecast Fix | v1.2 | 2/2 | Complete | 2026-02-12 |
 
 ---
 
 *Roadmap created: 2026-02-07*
-*Last updated: 2026-02-12 (gap closure plan added)*
+*Last updated: 2026-02-12 (gap closure complete)*
