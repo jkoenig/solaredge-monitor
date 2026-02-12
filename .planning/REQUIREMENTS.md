@@ -34,15 +34,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| API-01 | — | Pending |
-| DISP-01 | — | Pending |
-| DISP-02 | — | Pending |
+| API-01 | Phase 10 | Pending |
+| DISP-01 | Phase 10 | Pending |
+| DISP-02 | Phase 10 | Pending |
 
 **Coverage:**
 - v1.2 requirements: 3 total
-- Mapped to phases: 0
-- Unmapped: 3 ⚠️
+- Mapped to phases: 3
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-02-12*
-*Last updated: 2026-02-12 after initial definition*
+*Last updated: 2026-02-12 after roadmap creation*

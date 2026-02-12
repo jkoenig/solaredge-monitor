@@ -5,14 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-12)
 
 **Core value:** Show the homeowner their solar energy state at a glance on a physical e-ink display that's always up to date.
-**Current focus:** v1.2 Forecast Fix
+**Current focus:** Phase 10 - Forecast Fix
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-02-12 — Milestone v1.2 started
+Phase: 10 of 10 (Forecast Fix)
+Plan: 0 of ? in current phase
+Status: Ready to plan
+Last activity: 2026-02-12 — v1.2 roadmap created
+
+Progress: [█████████████████████░] 90% (9/10 phases complete)
 
 ## Performance Metrics
 
@@ -29,18 +31,24 @@ Last activity: 2026-02-12 — Milestone v1.2 started
 
 See PROJECT.md Key Decisions table for full list.
 
+Recent decisions affecting current work:
+- Phase 8: Manual bar drawing for forecast (draw_horizontal_bar auto-appends percentage text)
+- Phase 7: TTL cache for forecast API (1-hour cache prevents rate limit issues)
+
 ### Pending Todos
 
 None.
 
 ### Blockers/Concerns
 
-None.
+**Resolved by Phase 10:**
+- Forecast.Solar API parsing broken (KeyError on 'watt_hours_day')
+- Forecast screen visually inconsistent with other screens
 
 ## Session Continuity
 
 Last session: 2026-02-12
-Stopped at: Milestone v1.2 initialization
+Stopped at: v1.2 roadmap created
 Resume file: None
 
 ---
