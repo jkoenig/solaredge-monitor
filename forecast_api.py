@@ -126,7 +126,7 @@ class ForecastSolarAPI:
 
             # Parse response
             data = response.json()
-            watt_hours_day = data["result"]["watt_hours_day"]
+            watt_hours_day = data["result"]
 
             # Get today and tomorrow date strings
             today = datetime.now()
