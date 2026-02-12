@@ -41,10 +41,10 @@
   1. Forecast.Solar API response parses without KeyError (reads `data["result"]` directly instead of looking for nested 'watt_hours_day' key)
   2. Forecast screen uses identical layout grid as production/consumption screens (MARGIN=5, same font sizes, value+bar vertical centering, breakdown at CANVAS_H-MARGIN-110)
   3. Debug PNG output shows forecast screen with consistent visual style matching production/consumption screens (same whitespace, typography, alignment)
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 10-01: TBD
+- [ ] 10-01-PLAN.md — Fix API parsing and align forecast screen layout
 
 ## Progress
 
@@ -54,7 +54,7 @@ Plans:
 | 7. Forecast API Integration | v1.1 | 2/2 | Complete | 2026-02-07 |
 | 8. Forecast Screen | v1.1 | 1/1 | Complete | 2026-02-07 |
 | 9. Documentation | v1.1 | 1/1 | Complete | 2026-02-11 |
-| 10. Forecast Fix | v1.2 | 0/? | Not started | - |
+| 10. Forecast Fix | v1.2 | 0/1 | Not started | - |
 
 ---
 
