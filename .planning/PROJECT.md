@@ -36,7 +36,14 @@ Show the homeowner their solar energy state at a glance — production, consumpt
 
 ### Active
 
-(None — planning next milestone)
+## Current Milestone: v1.2 Forecast Fix
+
+**Goal:** Fix broken Forecast.Solar API parsing and align forecast screen visual style with all other screens.
+
+**Target features:**
+- Fix Forecast.Solar API response parsing (watt_hours_day KeyError)
+- Align forecast screen layout/style with production/consumption screens
+- Verify forecast screen via debug PNG output
 
 ### Out of Scope
 
@@ -55,7 +62,7 @@ Shipped v1.1 with 2,699 lines of Python across 20 modules, 9 display screens. Te
 
 Screens: Produktion, Verbrauch, Einspeisung, Bezug, Hausakku (auto-detected), Prognose (optional, Forecast.Solar), Verlauf Produktion, Verlauf Verbrauch.
 
-Known tech debt: PowerFlow data fetched but not displayed (reserved for future), SiteOverview API method implemented but unused (reserved for future).
+Known tech debt: PowerFlow data fetched but not displayed (reserved for future), SiteOverview API method implemented but unused (reserved for future). Forecast.Solar API parsing broken (KeyError on 'watt_hours_day' — endpoint returns flat result, not nested). Forecast screen visually inconsistent with other screens.
 
 Future ideas from requirements: PowerFlow display (real-time watts), SiteOverview screen (lifetime stats).
 
@@ -92,4 +99,4 @@ Future ideas from requirements: PowerFlow display (real-time watts), SiteOvervie
 | Manual bar drawing for forecast | draw_horizontal_bar auto-appends percentage — custom legend needed for forecast | ✓ Good |
 
 ---
-*Last updated: 2026-02-11 after v1.1 milestone*
+*Last updated: 2026-02-12 after v1.2 milestone start*

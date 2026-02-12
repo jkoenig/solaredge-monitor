@@ -2,19 +2,17 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-11)
+See: .planning/PROJECT.md (updated 2026-02-12)
 
 **Core value:** Show the homeowner their solar energy state at a glance on a physical e-ink display that's always up to date.
-**Current focus:** Planning next milestone
+**Current focus:** v1.2 Forecast Fix
 
 ## Current Position
 
-Phase: 9 of 9 — all milestones complete
-Plan: N/A
-Status: v1.1 shipped, awaiting next milestone
-Last activity: 2026-02-11 - Completed v1.1 Forecast Screen milestone
-
-Progress: [██████████] 100% (17/17 plans across v1.0 + v1.1)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-12 — Milestone v1.2 started
 
 ## Performance Metrics
 
@@ -41,10 +39,10 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-11
-Stopped at: v1.1 milestone complete
+Last session: 2026-02-12
+Stopped at: Milestone v1.2 initialization
 Resume file: None
 
 ---
 
-*Last updated: 2026-02-11*
+*Last updated: 2026-02-12*
