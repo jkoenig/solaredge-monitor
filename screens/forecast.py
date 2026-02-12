@@ -54,14 +54,9 @@ def render_forecast_screen(data: ForecastData) -> Image:
     gap_value_bar = 20
     gap_bar_label = 5
 
-    # Calculate percentage for sizing (will be recalculated for legend)
-    percentage = (data.actual_production / data.today_kwh * 100.0) if data.today_kwh > 0 else 0.0
-
-    # Bar label sizing
-    if data.today_kwh > 0:
-        bar_label_text = f"{int(percentage)}% der Prognose erreicht"
-    else:
-        bar_label_text = "Keine Prognose verfügbar"
+    # Bar label sizing — use fixed representative text for consistent group height
+    # (actual legend text computed later, matching how production.py uses "Eigenverbrauch 100%")
+    bar_label_text = "100% der Prognose erreicht"
     bar_label_measure = draw.textbbox((0, 0), bar_label_text, font=bar_font)
     bar_label_h = bar_label_measure[3]
 
