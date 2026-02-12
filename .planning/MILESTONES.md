@@ -51,3 +51,28 @@
 
 ---
 
+
+## v1.2 Forecast Fix (Shipped: 2026-02-12)
+
+**Delivered:** Fixed broken Forecast.Solar API response parsing and aligned forecast screen layout with all other screens. Regenerated documentation screenshot at correct resolution.
+
+**Phases completed:** 10 (2 plans, 3 tasks)
+
+**Key accomplishments:**
+- Fixed Forecast.Solar API parsing — reads flat `data["result"]` mapping directly (was KeyError on nonexistent `watt_hours_day` key)
+- Eliminated duplicate percentage calculation in forecast screen, replaced with fixed-text sizing pattern matching production.py
+- Regenerated docs/screen-prognose.png at 1000x488 (was incorrectly saved at 250x122 display resolution)
+- All 10 documentation screenshots now have consistent dimensions
+
+**Stats:**
+- 3 source files modified across 5 commits
+- +4 / -9 lines changed (net reduction — bugfix + cleanup)
+- 1 phase, 2 plans, 3 tasks
+- 1 day (2026-02-12)
+
+**Git range:** `4a86c53` (fix API parsing) → `c94de4d` (phase complete)
+
+**What's next:** TBD
+
+---
+

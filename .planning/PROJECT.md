@@ -34,16 +34,13 @@ Show the homeowner their solar energy state at a glance — production, consumpt
 - ✓ Forecast configuration via .env (lat, lon, tilt, azimuth, kWp) — v1.1
 - ✓ Hourly forecast caching (Forecast.Solar free tier: 12 req/hour) — v1.1
 
+- ✓ Forecast.Solar API response parsed correctly (reads flat `data["result"]` mapping) — v1.2
+- ✓ Forecast screen layout aligned with production/consumption screens (identical grid, fonts, spacing) — v1.2
+- ✓ Forecast screen verified via debug PNG output matching visual style of other screens — v1.2
+
 ### Active
 
-## Current Milestone: v1.2 Forecast Fix
-
-**Goal:** Fix broken Forecast.Solar API parsing and align forecast screen visual style with all other screens.
-
-**Target features:**
-- Fix Forecast.Solar API response parsing (watt_hours_day KeyError)
-- Align forecast screen layout/style with production/consumption screens
-- Verify forecast screen via debug PNG output
+(No active requirements — all milestones shipped)
 
 ### Out of Scope
 
@@ -58,11 +55,11 @@ Show the homeowner their solar energy state at a glance — production, consumpt
 
 ## Context
 
-Shipped v1.1 with 2,699 lines of Python across 20 modules, 9 display screens. Tech stack: Python 3.9+, Pillow, requests, python-dotenv, python-json-logger, Waveshare e-ink driver. Deployed on Raspberry Pi Zero WH (1 GHz, 512 MB) via systemd.
+Shipped v1.2 with ~2,700 lines of Python across 20 modules, 9 display screens. Tech stack: Python 3.9+, Pillow, requests, python-dotenv, python-json-logger, Waveshare e-ink driver. Deployed on Raspberry Pi Zero WH (1 GHz, 512 MB) via systemd.
 
 Screens: Produktion, Verbrauch, Einspeisung, Bezug, Hausakku (auto-detected), Prognose (optional, Forecast.Solar), Verlauf Produktion, Verlauf Verbrauch.
 
-Known tech debt: PowerFlow data fetched but not displayed (reserved for future), SiteOverview API method implemented but unused (reserved for future). Forecast.Solar API parsing broken (KeyError on 'watt_hours_day' — endpoint returns flat result, not nested). Forecast screen visually inconsistent with other screens.
+Known tech debt: PowerFlow data fetched but not displayed (reserved for future), SiteOverview API method implemented but unused (reserved for future).
 
 Future ideas from requirements: PowerFlow display (real-time watts), SiteOverview screen (lifetime stats).
 
@@ -97,6 +94,8 @@ Future ideas from requirements: PowerFlow display (real-time watts), SiteOvervie
 | TTL cache for forecast API | 1-hour cache prevents exceeding rate limits, caches None to avoid hammering | ✓ Good |
 | Optional forecast feature | All 5 .env values required for atomic activation, backward compatible | ✓ Good |
 | Manual bar drawing for forecast | draw_horizontal_bar auto-appends percentage — custom legend needed for forecast | ✓ Good |
+| Fixed-text sizing for bar labels | Matches production.py pattern, makes layout data-independent | ✓ Good |
+| Save docs screenshots at canvas resolution | 1000x488 for documentation, 250x122 only for display pipeline | ✓ Good |
 
 ---
-*Last updated: 2026-02-12 after v1.2 milestone start*
+*Last updated: 2026-02-12 after v1.2 milestone complete*
