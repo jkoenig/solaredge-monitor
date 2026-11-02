@@ -163,7 +163,7 @@ def run_screen_cycle(display: Display, cycle: list) -> None:
         # Render screen
         image = screen_fn(data)
         display.render(image, name)
-        logging.info(f"Displaying screen: {name}")
+        logging.debug(f"Displaying screen: {name}")
 
         # Wait 60 seconds (interruptible)
         if not interruptible_sleep(60):
