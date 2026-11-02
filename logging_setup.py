@@ -1,32 +1,35 @@
 """
 Structured JSON logging setup for SolarEdge Off-Grid Monitor.
 
-Provides unified logging configuration for both console (systemd) and file output.
+Logs go to stdout (captured by the systemd journal). A log file is written only
+when SOLAREDGE_LOG_FILE is set, to keep SD card writes low on the Pi.
 All logs use JSON format for structured parsing and analysis.
 
 Usage:
     from logging_setup import setup_logging
-    logger = setup_logging(log_level="INFO", log_file="solaredge_monitor.log")
+    logger = setup_logging(log_level="INFO")
     logger.info("Application started", extra={"version": "1.0"})
 """
 
 import logging
+import os
 from logging.handlers import RotatingFileHandler
 from pythonjsonlogger.json import JsonFormatter
 
 
-def setup_logging(log_level: str = "INFO", log_file: str = "solaredge_monitor.log") -> logging.Logger:
-    """Configure structured JSON logging with console and file output.
+def setup_logging(log_level: str = "INFO", log_file: str | None = None) -> logging.Logger:
+    """Configure structured JSON logging.
 
-    Sets up two handlers:
-    1. StreamHandler to stdout (captured by systemd)
-    2. RotatingFileHandler with 10MB rotation, 5 backups (60MB max)
-
-    Both handlers use JSON formatting for structured logging.
+    Sets up:
+    1. StreamHandler to stdout (captured by the systemd journal, which is
+       size-capped on the Pi)
+    2. Optionally a RotatingFileHandler (1MB rotation, 2 backups) when a log
+       file is given or SOLAREDGE_LOG_FILE is set. Off by default: every line
+       would otherwise be written twice to the SD card.
 
     Args:
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-        log_file: Path to log file (default: solaredge_monitor.log)
+        log_file: Path to log file (default: SOLAREDGE_LOG_FILE, else none)
 
     Returns:
         Configured root logger
@@ -41,19 +44,21 @@ def setup_logging(log_level: str = "INFO", log_file: str = "solaredge_monitor.lo
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)
 
-    # Rotating file handler (10MB per file, 5 backups = 60MB max)
-    file_handler = RotatingFileHandler(
-        log_file,
-        maxBytes=10_000_000,  # 10MB
-        backupCount=5,
-        encoding='utf-8'
-    )
-    file_handler.setFormatter(formatter)
-
     # Configure root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(log_level.upper())
     root_logger.addHandler(console_handler)
-    root_logger.addHandler(file_handler)
+
+    # Optional rotating file handler (1MB per file, 2 backups = 3MB max)
+    log_file = log_file or os.environ.get("SOLAREDGE_LOG_FILE", "").strip() or None
+    if log_file:
+        file_handler = RotatingFileHandler(
+            log_file,
+            maxBytes=1_000_000,  # 1MB
+            backupCount=2,
+            encoding='utf-8'
+        )
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
 
     return root_logger

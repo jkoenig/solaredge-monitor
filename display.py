@@ -71,7 +71,7 @@ class Display:
             scaled = gray.resize((self.width, self.height), Image.LANCZOS)
             final = scaled.convert('1')
             self.epd.display(self.epd.getbuffer(final))
-            logging.info(f"Rendered '{name}' to e-ink display")
+            logging.debug(f"Rendered '{name}' to e-ink display")
         else:
             # Save high-res PNG to debug folder (for visual inspection)
             filename = f"debug/{name}_{datetime.now():%Y%m%d_%H%M%S}.png"
