@@ -3,6 +3,10 @@
 .env.*
 !.env.example
 
+# OAuth token store (token file plus tmp/upload/lock siblings)
+.tokens.json
+.tokens.json.*
+
 # Python
 __pycache__/
 *.pyc
