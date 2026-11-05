@@ -16,6 +16,7 @@ bodies. Endpoints are logged as path templates with a literal "{site_id}".
 import logging
 import time
 from datetime import datetime, timedelta
+from datetime import time as dt_time
 from typing import Callable, Optional
 from zoneinfo import ZoneInfo
 
@@ -258,4 +259,56 @@ class SolarEdgeAPI:
             return None
         except (KeyError, ValueError, TypeError, AttributeError):
             logging.error("Failed to parse storage status response")
+            return None
+
+    def get_energy_history(self, days: int = 14) -> Optional[EnergyHistory]:
+        """Daily production and consumption (kWh) for the last `days` local dates.
+
+        Production comes from /energy, consumption is the sum over every meter
+        carrying consumptionEnergy in /meters/telemetry. Buckets are keyed by the
+        local date part of the timestamp (no UTC conversion). Returns None if
+        either request fails, so there is never a partial history.
+        """
+        now = self._now()
+        today = now.date()
+        start_date = today - timedelta(days=days - 1)
+        params = {
+            "resolution": "DAY",
+            "from": datetime.combine(start_date, dt_time.min, tzinfo=SITE_TZ).isoformat(timespec="seconds"),
+            "to": now.isoformat(timespec="seconds"),
+        }
+
+        energy = self._request("/sites/{site_id}/energy", {**params, "unit": "WH"})
+        if energy is None:
+            return None
+        meters = self._request("/sites/{site_id}/meters/telemetry", params)
+        if meters is None:
+            return None
+
+        try:
+            production_by_date = {}
+            unit = energy.get("unit", "WH")
+            for entry in energy["values"]:
+                key = entry["timestamp"][:10]
+                production_by_date[key] = production_by_date.get(key, 0.0) + to_kwh(entry.get("value"), unit)
+
+            consumption_by_date = {}
+            for meter in meters["meters"].values():
+                metric = meter.get("consumptionEnergy")
+                if not metric:
+                    continue
+                m_unit = metric.get("unit", "WH")
+                for entry in metric.get("values") or []:
+                    key = entry["timestamp"][:10]
+                    consumption_by_date[key] = consumption_by_date.get(key, 0.0) + to_kwh(entry.get("value"), m_unit)
+
+            dates = [(start_date + timedelta(days=i)).isoformat() for i in range(days)]
+            logging.info(f"History fetched: {days} days")
+            return EnergyHistory(
+                dates=dates,
+                production=[production_by_date.get(d, 0.0) for d in dates],
+                consumption=[consumption_by_date.get(d, 0.0) for d in dates],
+            )
+        except (KeyError, ValueError, TypeError, AttributeError):
+            logging.error("Failed to parse history response")
             return None
