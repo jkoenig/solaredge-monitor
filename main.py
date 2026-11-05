@@ -2,19 +2,21 @@
 """
 SolarEdge Off-Grid Monitor - Main Entry Point
 
-Production polling loop that:
-- Fetches SolarEdge data every 5 minutes (configurable)
-- Cycles through 4 display screens at 60 seconds each
-- Sleeps between midnight and 6 AM (configurable)
-- Shows error screen after 3 consecutive API failures
+Production loop that:
+- Reads V2 data through the OAuth token file (no API key). Interim cadence
+  (Phase 13 replaces it): overview every 30 minutes between 07:00 and 20:00
+  by default, storage hourly, history daily, temperature twice daily, and an
+  hourly backoff after 3 failed overview rounds
+- Cycles through the cached screens at 60 seconds each; between polls the
+  display keeps rotating on cached values without any API call
+- Sleeps outside the configured window (default 20:00 to 07:00)
+- Shows error screen after 3 consecutive failed overview rounds
 - Shows "Login nötig" (and makes no calls) while the OAuth token is missing,
   corrupt or rejected; resumes automatically when the token file or .env changes
 - Clears display on graceful shutdown (SIGTERM/SIGINT)
 
 Run with: python3 main.py
 
-Requires .env file with:
-  SOLAREDGE_API_KEY=your_api_key
 The site id comes from the token file; client id/secret are written to .env
 by the Mac login script.
 """
@@ -23,7 +25,9 @@ import logging
 import signal
 import sys
 import time
+from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 from pathlib import Path
@@ -38,10 +42,12 @@ load_dotenv(interpolate=False)
 
 from config import Config
 from logging_setup import setup_logging
-from solaredge_api import SolarEdgeAPI
+from solaredge_api import SolarEdgeAPI, SITE_TZ
+from fetch_schedule import FetchPlan
+from battery_cache import load_battery_cache, save_battery_cache
+from fetcher import DataCache, fetch_round, build_cycle
 from forecast_api import ForecastSolarAPI
 from display import Display
-from models import BatteryData, ForecastData
 from screens import get_screens
 from screens.error import render_error_screen, render_login_required_screen
 from token_store import TokenStore, TokenFileWatcher, LoginRequired, TransientAuthError
@@ -107,62 +113,113 @@ def interruptible_sleep(seconds: float) -> bool:
     return True
 
 
-def fetch_data(api: SolarEdgeAPI, has_battery: bool = False, forecast_api: ForecastSolarAPI = None):
+def init_site_clients(config: Config, token_store: TokenStore, site_id: str, has_forecast: bool):
+    """Create the SolarEdge client, read the battery cache and build the screen list.
+
+    Makes no API call: detection runs in fetch_round (DEVICES job) when unknown.
     """
-    Fetch data from SolarEdge API.
-
-    Returns:
-        tuple: (energy_details, battery_data, history_data, forecast_data) - any may be None on failure
-    """
-    energy_details = api.get_energy_details()
-    power_flow = api.get_current_power_flow()
-
-    if energy_details:
-        logging.debug(f"Fetched energy details: {energy_details}")
-    if power_flow:
-        logging.debug(f"Fetched power flow: {power_flow}")
-
-    battery_data = None
-    if has_battery and power_flow:
-        storage = api.get_storage_data()
-        battery_data = BatteryData(
-            state_of_charge=power_flow.state_of_charge,
-            status=power_flow.storage_status,
-            internal_temp=storage["internal_temp"] if storage else 0.0,
-            available_energy=storage["available_energy"] if storage else 0.0,
-            power=storage["power"] if storage else 0.0,
-        )
-        logging.debug(f"Fetched battery data: {battery_data}")
-
-    history_data = api.get_energy_history()
-    if history_data:
-        logging.debug(f"Fetched energy history: {len(history_data.dates)} days")
-
-    forecast_data = None
-    if forecast_api:
-        raw_forecast = forecast_api.get_forecast()
-        if raw_forecast:
-            actual_prod = energy_details.production if energy_details else 0.0
-            forecast_data = ForecastData(
-                today_kwh=raw_forecast.today_kwh,
-                tomorrow_kwh=raw_forecast.tomorrow_kwh,
-                actual_production=actual_prod,
-                fetched_at=raw_forecast.fetched_at,
-            )
-            logging.debug(f"Fetched forecast: today={forecast_data.today_kwh:.1f} kWh, tomorrow={forecast_data.tomorrow_kwh:.1f} kWh, actual={forecast_data.actual_production:.1f} kWh")
-
-    return energy_details, battery_data, history_data, forecast_data
-
-
-def init_site_clients(config: Config, site_id: str, has_forecast: bool):
-    """Create the SolarEdge client, detect battery and build the screen list."""
-    api = SolarEdgeAPI(config.api_key, site_id)
-    battery_detected = api.has_battery()
-    logging.info(f"Battery detected: {battery_detected}")
-    screens = get_screens(has_battery=battery_detected, has_forecast_config=has_forecast)
+    api = SolarEdgeAPI(token_store)
+    cached = load_battery_cache(config.battery_cache_file, site_id)
+    battery_known = cached is not None
+    has_battery = bool(cached)
+    if battery_known:
+        logging.info(f"Battery presence from cache: {has_battery}")
+    else:
+        logging.info("Battery presence unknown, will detect")
+    screens = get_screens(has_battery=has_battery, has_forecast_config=has_forecast)
     screen_names = [name for _, _, name in screens]
     logging.info(f"Screen rotation: {', '.join(screen_names)}")
-    return api, battery_detected, screens
+    return api, has_battery, battery_known, screens
+
+
+MAX_FAILURES = 3
+
+
+@dataclass
+class LoopState:
+    """Mutable state of the polling loop."""
+    config: Any
+    token_store: Any
+    api: Any
+    plan: Any
+    cache: Any
+    screens: list
+    has_battery: bool
+    battery_known: bool
+    site_id: str
+    forecast_api: Any = None
+    has_forecast: bool = False
+    next_poll: float = 0.0
+    poll_interval_seconds: float = 1800.0
+    consecutive_failures: int = 0
+
+
+def run_iteration(state: LoopState, display, now_mono: float) -> bool:
+    """One loop iteration: poll if due, then rotate cached screens.
+
+    Returns True if a screen cycle ran. LoginRequired propagates.
+    """
+    if now_mono >= state.next_poll:
+        now_local = datetime.now(SITE_TZ)
+        if state.plan.due(now_local, state.has_battery, state.battery_known):
+            logging.info("Starting poll cycle")
+            # Refresh token if close to expiry (keeps the 14-day chain alive)
+            try:
+                state.token_store.get_access_token()
+            except TransientAuthError as e:
+                logging.warning(f"Token refresh deferred: {e}")
+            state.token_store.warn_if_grant_expiring()
+
+            result = fetch_round(
+                state.api, state.plan, state.cache, now_local,
+                state.has_battery, state.battery_known, state.forecast_api,
+            )
+
+            if result.battery_detected is not None:
+                detected = result.battery_detected
+                save_battery_cache(state.config.battery_cache_file, state.site_id, detected)
+                changed = detected != state.has_battery
+                state.has_battery = detected
+                state.battery_known = True
+                if changed:
+                    state.screens = get_screens(
+                        has_battery=detected, has_forecast_config=state.has_forecast
+                    )
+                logging.info(f"Battery detected: {detected}")
+
+            if result.overview_ok:
+                state.consecutive_failures = 0
+                e = state.cache.energy
+                logging.info(
+                    f"Poll successful - Production: {e.production:.2f} kWh, "
+                    f"Consumption: {e.consumption:.2f} kWh, "
+                    f"Feed-in: {e.feed_in:.2f} kWh, "
+                    f"Purchased: {e.purchased:.2f} kWh"
+                )
+            else:
+                state.consecutive_failures += 1
+                logging.warning(
+                    f"Poll failed (consecutive failures: {state.consecutive_failures}/{MAX_FAILURES})"
+                )
+                if state.consecutive_failures == MAX_FAILURES:
+                    logging.error(
+                        f"API unreachable after {MAX_FAILURES} consecutive failures, "
+                        f"displaying error screen"
+                    )
+                    display.render(render_error_screen(), "error")
+
+        # Schedule next poll
+        state.next_poll += state.poll_interval_seconds
+        if state.next_poll < time.monotonic():
+            logging.warning("Poll cycle took longer than interval, resetting schedule")
+            state.next_poll = time.monotonic() + state.poll_interval_seconds
+
+    if state.consecutive_failures >= MAX_FAILURES:
+        return False
+    if state.cache.energy is not None:
+        run_screen_cycle(display, build_cycle(state.screens, state.cache))
+        return True
+    return False
 
 
 def run_screen_cycle(display: Display, cycle: list) -> None:
@@ -221,9 +278,7 @@ def main():
         config.token_file, config.client_id, config.client_secret, env_file=config.env_file
     )
     watcher = TokenFileWatcher(config.token_file, config.env_file)
-    api = None
-    battery_detected = False
-    screens = []
+    state = None
     initialized_site_id = None
     site_mismatch_logged = False
 
@@ -243,12 +298,6 @@ def main():
         logging.info("Forecast disabled: incomplete FORECAST_* configuration")
 
     # Initialize polling state
-    consecutive_failures = 0
-    MAX_FAILURES = 3
-    last_successful_energy = None
-    last_successful_battery = None
-    last_successful_history = None
-    last_successful_forecast = None
     poll_interval_seconds = config.poll_interval * 60
     in_sleep = False
     next_poll = time.monotonic()  # Poll immediately on startup
@@ -285,6 +334,8 @@ def main():
                     in_sleep = False
                     login_screen_shown = False  # redraw after display.clear()
                     next_poll = time.monotonic()  # Force immediate poll after wake
+                    if state is not None:
+                        state.next_poll = next_poll
 
             # Login-needed state: only the login screen, no calls (D-07..D-09)
             if login_needed:
@@ -301,7 +352,9 @@ def main():
                             logging.info("Login OK, resuming")
                             login_needed = False
                             login_screen_shown = False
-                            consecutive_failures = 0
+                            if state is not None:
+                                state.consecutive_failures = 0
+                                state.next_poll = time.monotonic()
                             next_poll = time.monotonic()
                         except LoginRequired as e:
                             logging.warning(f"Login still required: {e.reason}")
@@ -310,27 +363,10 @@ def main():
                             login_needed = False
                             login_screen_shown = False
                             next_poll = time.monotonic()
+                            if state is not None:
+                                state.next_poll = next_poll
                 interruptible_sleep(1)
                 continue
-
-            # Check if it's time to poll
-            now = time.monotonic()
-            if now < next_poll:
-                interruptible_sleep(1)
-                continue
-
-            # Fetch data
-            logging.info("Starting poll cycle")
-
-            # Refresh token if close to expiry (keeps the 14-day chain alive)
-            try:
-                token_store.get_access_token()
-            except LoginRequired as e:
-                enter_login_state(e.reason)
-                continue
-            except TransientAuthError as e:
-                logging.warning(f"Token refresh deferred: {e}")
-            token_store.warn_if_grant_expiring()
 
             try:
                 token_site_id = token_store.site_id
@@ -338,84 +374,37 @@ def main():
                 enter_login_state(e.reason)
                 continue
             if initialized_site_id != token_site_id:
-                api, battery_detected, screens = init_site_clients(config, token_site_id, has_forecast)
+                api, has_battery, battery_known, screens = init_site_clients(
+                    config, token_store, token_site_id, has_forecast
+                )
+                new_state = LoopState(
+                    config=config,
+                    token_store=token_store,
+                    api=api,
+                    plan=FetchPlan(),
+                    cache=DataCache(),
+                    screens=screens,
+                    has_battery=has_battery,
+                    battery_known=battery_known,
+                    site_id=token_site_id,
+                    forecast_api=forecast_api,
+                    has_forecast=has_forecast,
+                    next_poll=state.next_poll if state is not None else next_poll,
+                    poll_interval_seconds=poll_interval_seconds,
+                )
+                state = new_state
                 initialized_site_id = token_site_id
             if config.site_id and config.site_id != token_site_id and not site_mismatch_logged:
                 logging.warning("Configured SOLAREDGE_SITE_ID differs from token site id; using token site id")
                 site_mismatch_logged = True
 
-            energy_details, battery_data, history_data, forecast_data = fetch_data(api, has_battery=battery_detected, forecast_api=forecast_api)
-
-            if energy_details is not None:
-                # Successful poll
-                consecutive_failures = 0
-                last_successful_energy = energy_details
-                if battery_data is not None:
-                    last_successful_battery = battery_data
-                if history_data is not None:
-                    last_successful_history = history_data
-                if forecast_data is not None:
-                    last_successful_forecast = forecast_data
-                logging.info(
-                    f"Poll successful - Production: {energy_details.production:.2f} kWh, "
-                    f"Consumption: {energy_details.consumption:.2f} kWh, "
-                    f"Feed-in: {energy_details.feed_in:.2f} kWh, "
-                    f"Purchased: {energy_details.purchased:.2f} kWh"
-                )
-
-                # Build screen cycle with appropriate data per screen
-                cycle = []
-                for render_fn, data_key, name in screens:
-                    if data_key == "energy":
-                        cycle.append((render_fn, energy_details, name))
-                    elif data_key == "battery" and battery_data:
-                        cycle.append((render_fn, battery_data, name))
-                    elif data_key == "history" and (history_data or last_successful_history):
-                        cycle.append((render_fn, history_data or last_successful_history, name))
-                    elif data_key == "forecast" and forecast_data:
-                        cycle.append((render_fn, forecast_data, name))
-
-                run_screen_cycle(display, cycle)
-
-            else:
-                # Poll failed
-                consecutive_failures += 1
-                logging.warning(
-                    f"Poll failed (consecutive failures: {consecutive_failures}/{MAX_FAILURES})"
-                )
-
-                if consecutive_failures >= MAX_FAILURES:
-                    # Show error screen after threshold
-                    logging.error(
-                        f"API unreachable after {MAX_FAILURES} consecutive failures, "
-                        f"displaying error screen"
-                    )
-                    error_image = render_error_screen()
-                    display.render(error_image, "error")
-                elif last_successful_energy is not None:
-                    # Show stale data before threshold
-                    logging.info("Showing stale data from last successful poll")
-                    stale_cycle = []
-                    for render_fn, data_key, name in screens:
-                        if data_key == "energy":
-                            stale_cycle.append((render_fn, last_successful_energy, name))
-                        elif data_key == "battery" and last_successful_battery:
-                            stale_cycle.append((render_fn, last_successful_battery, name))
-                        elif data_key == "history" and last_successful_history:
-                            stale_cycle.append((render_fn, last_successful_history, name))
-                        elif data_key == "forecast" and last_successful_forecast:
-                            stale_cycle.append((render_fn, last_successful_forecast, name))
-                    run_screen_cycle(display, stale_cycle)
-
-            # Schedule next poll
-            next_poll += poll_interval_seconds
-
-            # If we fell behind (long cycle), reset to now + interval
-            if next_poll < time.monotonic():
-                logging.warning(
-                    "Poll cycle took longer than interval, resetting schedule"
-                )
-                next_poll = time.monotonic() + poll_interval_seconds
+            try:
+                ran = run_iteration(state, display, time.monotonic())
+            except LoginRequired as e:
+                enter_login_state(e.reason)
+                continue
+            if not ran:
+                interruptible_sleep(1)
 
     finally:
         # Always runs: clean shutdown
