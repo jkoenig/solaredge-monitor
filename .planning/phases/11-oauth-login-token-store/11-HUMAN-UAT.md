@@ -1,5 +1,5 @@
 ---
-status: partial
+status: complete
 phase: 11-oauth-login-token-store
 source: [11-VERIFICATION.md]
 started: 2026-11-05T14:05:00+01:00
@@ -8,7 +8,7 @@ updated: 2026-11-05T19:11:00+01:00
 
 ## Current Test
 
-[awaiting human testing]
+[done]
 
 ## Tests
 
@@ -18,15 +18,15 @@ result: passed — journal 15:54:42 and 17:54:43 "Access token refreshed, expire
 
 ### 2. "Login nötig" on the physical e-ink panel
 expected: With no token file the panel shows "Login nötig" top-left and "Mac: login-Skript starten" centered, nothing else. (Software state confirmed in the journal 13:41; panel not yet seen by the owner. Can be checked at the next re-login, or by temporarily renaming .tokens.json — that does not burn the token.)
-result: [pending]
+result: skipped — owner does not want to watch the panel; render covered by tests, software state confirmed in journal 13:41. Will be seen naturally at the next re-login.
 
 ## Summary
 
 total: 2
 passed: 1
 issues: 0
-pending: 1
-skipped: 0
+pending: 0
+skipped: 1
 blocked: 0
 
 ## Gaps

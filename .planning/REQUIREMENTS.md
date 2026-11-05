@@ -8,10 +8,10 @@
 
 ### Anmeldung (AUTH)
 
-- [ ] **AUTH-01**: Owner can authorize the app once from the Mac with a login script that opens the browser, catches the code on http://localhost:8765/callback and exchanges it for tokens (client ID/secret read from 1Password via `op`, item 7rboxat3in2tlx2ywilmsna5cy)
-- [ ] **AUTH-02**: The login script places the token pair on se-monitor with mode 0600; from then on only the Pi refreshes tokens
-- [ ] **AUTH-03**: The Pi refreshes the access token before it expires and persists the rotated refresh token atomically (write + rename, file lock) before using it
-- [ ] **AUTH-04**: When the token is missing, invalid or refresh is rejected, the display shows "Login nötig"; the service keeps running and resumes fetching once new tokens are in place
+- [x] **AUTH-01**: Owner can authorize the app once from the Mac with a login script that opens the browser, catches the code on http://localhost:8765/callback and exchanges it for tokens (client ID/secret read from 1Password via `op`, item 7rboxat3in2tlx2ywilmsna5cy)
+- [x] **AUTH-02**: The login script places the token pair on se-monitor with mode 0600; from then on only the Pi refreshes tokens
+- [x] **AUTH-03**: The Pi refreshes the access token before it expires and persists the rotated refresh token atomically (write + rename, file lock) before using it
+- [x] **AUTH-04**: When the token is missing, invalid or refresh is rejected, the display shows "Login nötig"; the service keeps running and resumes fetching once new tokens are in place
 
 ### Daten (API)
 
@@ -49,10 +49,10 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUTH-01 | Phase 11 | Pending |
-| AUTH-02 | Phase 11 | Pending |
-| AUTH-03 | Phase 11 | Pending |
-| AUTH-04 | Phase 11 | Pending |
+| AUTH-01 | Phase 11 | Complete |
+| AUTH-02 | Phase 11 | Complete |
+| AUTH-03 | Phase 11 | Complete |
+| AUTH-04 | Phase 11 | Complete |
 | API-01 | Phase 12 | Pending |
 | API-02 | Phase 12 | Pending |
 | API-03 | Phase 12 | Pending |
