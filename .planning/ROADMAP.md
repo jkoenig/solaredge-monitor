@@ -102,8 +102,8 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 12-01-PLAN.md — EnergyDetails breakdown fields + Produktion/Verbrauch use direct values, screen render tests (wave 1)
-- [ ] 12-02-PLAN.md — FetchPlan interim cadence (D-07) + battery presence disk cache (wave 1)
+- [x] 12-01-PLAN.md — EnergyDetails breakdown fields + Produktion/Verbrauch use direct values, screen render tests (wave 1)
+- [x] 12-02-PLAN.md — FetchPlan interim cadence (D-07) + battery presence disk cache (wave 1)
 
 **Wave 2**
 
@@ -158,7 +158,7 @@ Plans:
 | 9. Documentation | v1.1 | 1/1 | Complete | 2026-02-11 |
 | 10. Forecast Fix | v1.2 | 2/2 | Complete | 2026-02-12 |
 | 11. OAuth Login & Token Store | v2.0 | 5/5 | Complete    | 2026-11-05 |
-| 12. V2 Data Client & Screens | v2.0 | 0/? | Not started | - |
+| 12. V2 Data Client & Screens | v2.0 | 2/6 | In Progress|  |
 | 13. Fetch Plan & Quota Guard | v2.0 | 0/? | Not started | - |
 | 14. Docs & Deployment | v2.0 | 0/? | Not started | - |
 
