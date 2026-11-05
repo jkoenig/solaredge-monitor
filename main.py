@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from dotenv import load_dotenv
 
 # Load .env before importing Config (Config reads from environment)
-load_dotenv()
+load_dotenv(interpolate=False)
 
 from config import Config
 from logging_setup import setup_logging

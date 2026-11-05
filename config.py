@@ -6,7 +6,7 @@ Validates required fields and type-converts all values at startup.
 
 Usage:
     from dotenv import load_dotenv
-    load_dotenv()  # Load .env file first
+    load_dotenv(interpolate=False)  # Load .env file first; no ${VAR} expansion so secrets with "$" stay intact
     from config import Config
     config = Config()  # Loads from environment, validates, raises ValueError on errors
     config.log_startup()  # Logs with secrets masked

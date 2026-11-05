@@ -103,7 +103,7 @@ class PureHelpers(unittest.TestCase):
             with tempfile.TemporaryDirectory() as d:
                 p = os.path.join(d, ".env")
                 Path(p).write_text("K=" + sl.format_env_value(secret) + "\n")
-                self.assertEqual(dotenv_values(p)["K"], secret)
+                self.assertEqual(dotenv_values(p, interpolate=False)["K"], secret)
 
 
 class RemoteEnvMerge(unittest.TestCase):
