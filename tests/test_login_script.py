@@ -279,6 +279,18 @@ class UploadAndFlow(unittest.TestCase):
         wb.assert_not_called()
         srv.assert_not_called()
 
+    def test_op_uses_personal_account(self):
+        item = {"fields": [{"label": "Client ID", "value": "cid"},
+                           {"label": "Client Secret", "value": "sec"},
+                           {"label": "username", "value": "u"},
+                           {"label": "password", "value": "p"}]}
+        done = mock.Mock(returncode=0, stdout=json.dumps(item), stderr="")
+        with mock.patch.object(sl.shutil, "which", return_value="/usr/bin/op"), \
+                mock.patch.object(sl.subprocess, "run", return_value=done) as run:
+            self.assertEqual(sl.read_op_credentials(sl.OP_ITEM, None, None), ("cid", "sec"))
+        cmd = run.call_args[0][0]
+        self.assertEqual(cmd[cmd.index("--account") + 1], "my.1password.com")
+
     def test_main_login_error_exit_1(self):
         with mock.patch.object(sl, "read_op_credentials",
                                side_effect=sl.LoginError("boom")):

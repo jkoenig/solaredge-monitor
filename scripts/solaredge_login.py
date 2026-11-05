@@ -47,6 +47,8 @@ REDIRECT_URI = "http://localhost:8765/callback"
 SCOPE = "SITE_DATA DEVICE_DATA"
 ACCESS_DURATION = "24"
 OP_ITEM = "7rboxat3in2tlx2ywilmsna5cy"
+# The item lives in the personal 1Password account, not the default (work) one.
+OP_ACCOUNT = "my.1password.com"
 DEFAULT_HOST = "se-monitor"
 DEFAULT_REMOTE_DIR = "/home/pi/solaredge-monitor"
 TOKEN_FILENAME = ".tokens.json"
@@ -271,14 +273,18 @@ class CallbackServer(http.server.HTTPServer):
 # ---------------------------------------------------------------------------
 
 def read_op_credentials(
-    item: str, id_label: Optional[str], secret_label: Optional[str]
+    item: str, id_label: Optional[str], secret_label: Optional[str],
+    account: Optional[str] = OP_ACCOUNT,
 ) -> Tuple[str, str]:
     if shutil.which("op") is None:
         raise LoginError(
             "1Password CLI `op` not found. Install it and sign in (op signin)."
         )
+    cmd = ["op", "item", "get", item, "--format", "json"]
+    if account:
+        cmd += ["--account", account]
     proc = subprocess.run(
-        ["op", "item", "get", item, "--format", "json"],
+        cmd,
         capture_output=True,
         text=True,
         check=False,
@@ -401,6 +407,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--host", default=DEFAULT_HOST)
     ap.add_argument("--remote-dir", default=DEFAULT_REMOTE_DIR)
     ap.add_argument("--op-item", default=OP_ITEM)
+    ap.add_argument("--op-account", default=OP_ACCOUNT,
+                    help="1Password account (sign-in address); empty string = op default")
     ap.add_argument("--op-id-field", default=None)
     ap.add_argument("--op-secret-field", default=None)
     ap.add_argument("--port", type=int, default=CALLBACK_PORT,
@@ -410,7 +418,8 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     try:
         client_id, client_secret = read_op_credentials(
-            args.op_item, args.op_id_field, args.op_secret_field
+            args.op_item, args.op_id_field, args.op_secret_field,
+            args.op_account or None,
         )
         update_remote_env(args.host, args.remote_dir, client_id, client_secret)
         print("Client credentials written to %s:%s/.env" % (args.host, args.remote_dir))
