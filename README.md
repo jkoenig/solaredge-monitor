@@ -81,11 +81,10 @@ Copy `.env.example` to `.env` and configure:
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `SOLAREDGE_API_KEY` | Yes | — | Your SolarEdge API key |
 | `SOLAREDGE_SITE_ID` | Yes | — | Your SolarEdge site ID |
-| `SOLAREDGE_POLL_INTERVAL` | No | `5` | Minutes between API polls (minimum: 1) |
-| `SOLAREDGE_SLEEP_START` | No | `0` | Hour to pause polling (0-23, 0 = midnight) |
-| `SOLAREDGE_SLEEP_END` | No | `6` | Hour to resume polling (0-23, 6 = 6 AM) |
+| `SOLAREDGE_POLL_INTERVAL` | No | `30` | Minutes between API polls (minimum: 30, every API call costs a credit) |
+| `SOLAREDGE_SLEEP_START` | No | `20` | Hour to pause polling (0-23) |
+| `SOLAREDGE_SLEEP_END` | No | `7` | Hour to resume polling (0-23) |
 | `SOLAREDGE_DEBUG` | No | `false` | Enable debug mode (saves PNG files instead of using display) |
 | `SOLAREDGE_LOG_LEVEL` | No | `INFO` | Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL |
 | | | | **Solar Forecast** (optional) |
@@ -100,11 +99,10 @@ Copy `.env.example` to `.env` and configure:
 Example `.env`:
 
 ```env
-SOLAREDGE_API_KEY=your_api_key_here
 SOLAREDGE_SITE_ID=your_site_id_here
-SOLAREDGE_POLL_INTERVAL=5
-SOLAREDGE_SLEEP_START=0
-SOLAREDGE_SLEEP_END=6
+SOLAREDGE_POLL_INTERVAL=30
+SOLAREDGE_SLEEP_START=20
+SOLAREDGE_SLEEP_END=7
 SOLAREDGE_DEBUG=false
 SOLAREDGE_LOG_LEVEL=INFO
 
@@ -193,7 +191,7 @@ journalctl -u solaredge-monitor -n 20
 ```
 
 **Common causes:**
-- Missing or invalid `.env` configuration (check `SOLAREDGE_API_KEY` and `SOLAREDGE_SITE_ID`)
+- Missing or invalid `.env` configuration (check the token file and the display for "Login nötig"; `SOLAREDGE_SITE_ID` is optional)
 - Invalid log level in `SOLAREDGE_LOG_LEVEL` (must be DEBUG, INFO, WARNING, ERROR, or CRITICAL)
 - Missing dependencies (run `./deploy.sh` to reinstall)
 
@@ -244,7 +242,7 @@ journalctl -u solaredge-monitor -f
 
 SolarEdge has rate limits on their API. If you see 429 errors in logs:
 
-- Increase `SOLAREDGE_POLL_INTERVAL` in `.env` (default: 5 minutes)
+- Increase `SOLAREDGE_POLL_INTERVAL` in `.env` (default: 30 minutes, minimum: 30)
 - The monitor automatically retries with exponential backoff
 
 ## Project Structure
@@ -254,7 +252,10 @@ SolarEdge has rate limits on their API. If you see 429 errors in logs:
 ├── main.py                    # Entry point — polling loop and screen cycling
 ├── config.py                  # Environment-based configuration
 ├── solaredge_api.py           # SolarEdge API client with retry logic
-├── models.py                  # Data models (PowerFlow, EnergyDetails, EnergyHistory, SiteOverview, BatteryData, ForecastData)
+├── models.py                  # Data models (EnergyDetails, EnergyHistory, BatteryData, ForecastData)
+├── fetch_schedule.py          # Interim fetch cadence (which endpoint is due when)
+├── fetcher.py                 # One fetch round: due jobs -> data cache, today-bar patch
+├── battery_cache.py           # Battery presence cache (.battery.json)
 ├── display.py                 # Display abstraction (e-ink / PNG debug mode)
 ├── forecast_api.py            # Forecast.Solar API client with TTL caching
 ├── logging_setup.py           # JSON logging configuration (stdout + rotating file)

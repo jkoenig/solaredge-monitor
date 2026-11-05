@@ -2,7 +2,7 @@
 Configuration management for SolarEdge Off-Grid Monitor.
 
 Loads all configuration from environment variables (with SOLAREDGE_ prefix).
-Validates required fields and type-converts all values at startup.
+Type-converts and validates all values at startup.
 
 Usage:
     from dotenv import load_dotenv
@@ -18,6 +18,10 @@ from typing import Optional
 import os
 import logging
 
+# Every API call costs a credit (interim D-07 budget protection)
+MIN_POLL_INTERVAL = 30
+MAX_AWAKE_HOURS = 13
+
 
 @dataclass
 class Config:
@@ -25,8 +29,7 @@ class Config:
 
     All environment variables use SOLAREDGE_ prefix.
 
-    Required fields (must be provided):
-        - api_key: SolarEdge API key (D-15; removed in Phase 12)
+    No field is strictly required: authentication is OAuth (V2), see below.
 
     Optional fields (with defaults):
         - site_id: informational only; the app reads the site id from the
@@ -36,27 +39,30 @@ class Config:
           service shows "Login nötig" instead.
         - token_file: OAuth token file (default: <app dir>/.tokens.json,
           override with SOLAREDGE_TOKEN_FILE) (D-11)
-        - poll_interval: Minutes between API polls (default: 5, minimum: 1)
-        - sleep_start_hour: Hour to pause polling, 0-23 (default: 0 = midnight)
-        - sleep_end_hour: Hour to resume polling, 0-23 (default: 6 = 6 AM)
+        - battery_cache_file: battery presence cache next to the token file
+        - poll_interval: Minutes between API polls (default: 30, minimum: 30,
+          lower values are raised because every API call costs a credit)
+        - sleep_start_hour: Hour to pause polling, 0-23 (default: 20)
+        - sleep_end_hour: Hour to resume polling, 0-23 (default: 7)
+        These interim D-07 defaults keep the Pi within the daily call budget
+        without .env overrides; Phase 13 replaces the interim cadence.
         - debug: Enable debug mode (default: False)
         - log_level: Logging level (default: INFO)
     """
 
-    # Required credentials
-    api_key: str = ""
     site_id: str = ""  # optional, informational (D-14)
 
     # OAuth (Phase 11)
     client_id: str = ""
     client_secret: str = ""
     token_file: str = ""
+    battery_cache_file: str = ""
     env_file: str = ""
 
     # Optional operational settings with defaults
-    poll_interval: int = 5
-    sleep_start_hour: int = 0
-    sleep_end_hour: int = 6
+    poll_interval: int = 30
+    sleep_start_hour: int = 20
+    sleep_end_hour: int = 7
     debug: bool = False
     log_level: str = "INFO"
 
@@ -79,11 +85,6 @@ class Config:
         """
         errors = []
 
-        # Load and validate required credentials
-        self.api_key = os.environ.get("SOLAREDGE_API_KEY", "")
-        if not self.api_key:
-            errors.append("  - SOLAREDGE_API_KEY: SolarEdge API key (required)")
-
         # Site id is optional: read from the token file at runtime (D-14)
         self.site_id = os.environ.get("SOLAREDGE_SITE_ID", "").strip()
 
@@ -96,19 +97,21 @@ class Config:
             os.environ.get("SOLAREDGE_TOKEN_FILE", "").strip()
             or str(app_dir / ".tokens.json")
         )
+        self.battery_cache_file = str(Path(self.token_file).parent / ".battery.json")
         self.env_file = str(app_dir / ".env")
 
         # Load and validate poll interval
-        poll_str = os.environ.get("SOLAREDGE_POLL_INTERVAL", "5")
+        poll_str = os.environ.get("SOLAREDGE_POLL_INTERVAL", "30")
         try:
             self.poll_interval = int(poll_str)
-            if self.poll_interval < 1:
-                errors.append("  - SOLAREDGE_POLL_INTERVAL: Must be >= 1 minute")
+            if self.poll_interval < MIN_POLL_INTERVAL:
+                logging.warning("SOLAREDGE_POLL_INTERVAL below 30 min raised to 30 (API credit budget)")
+                self.poll_interval = MIN_POLL_INTERVAL
         except ValueError:
             errors.append(f"  - SOLAREDGE_POLL_INTERVAL: Must be an integer (got '{poll_str}')")
 
         # Load and validate sleep start hour
-        start_str = os.environ.get("SOLAREDGE_SLEEP_START", "0")
+        start_str = os.environ.get("SOLAREDGE_SLEEP_START", "20")
         try:
             self.sleep_start_hour = int(start_str)
             if not (0 <= self.sleep_start_hour <= 23):
@@ -117,7 +120,7 @@ class Config:
             errors.append(f"  - SOLAREDGE_SLEEP_START: Must be an integer (got '{start_str}')")
 
         # Load and validate sleep end hour
-        end_str = os.environ.get("SOLAREDGE_SLEEP_END", "6")
+        end_str = os.environ.get("SOLAREDGE_SLEEP_END", "7")
         try:
             self.sleep_end_hour = int(end_str)
             if not (0 <= self.sleep_end_hour <= 23):
@@ -152,14 +155,9 @@ class Config:
     def log_startup(self):
         """Log configuration at startup with secrets masked.
 
-        API key is masked to show only last 4 characters.
-        All other values are shown in full.
+        Ids are masked to show only the last 4 characters.
         """
-        # Mask API key (show last 4 chars, or **** if shorter)
-        masked_key = f"****{self.api_key[-4:]}" if len(self.api_key) >= 4 else "****"
-
         logging.info("Configuration loaded:")
-        logging.info(f"  SOLAREDGE_API_KEY: {masked_key}")
         if self.site_id:
             masked_site = f"****{self.site_id[-4:]}" if len(self.site_id) >= 4 else "****"
         else:
@@ -173,9 +171,15 @@ class Config:
         # Never log any part of the secret (D-16)
         logging.info(f"  SOLAREDGE_CLIENT_SECRET: {'set' if self.client_secret else 'missing'}")
         logging.info(f"  SOLAREDGE_TOKEN_FILE: {self.token_file}")
+        logging.info(f"  SOLAREDGE_BATTERY_CACHE: {self.battery_cache_file}")
         logging.info(f"  SOLAREDGE_POLL_INTERVAL: {self.poll_interval} min")
         logging.info(f"  SOLAREDGE_SLEEP_START: {self.sleep_start_hour}:00")
         logging.info(f"  SOLAREDGE_SLEEP_END: {self.sleep_end_hour}:00")
+        awake = self._awake_hours()
+        if awake > MAX_AWAKE_HOURS:
+            logging.warning(
+                f"Daytime window is {awake} h (> {MAX_AWAKE_HOURS} h) and may exceed the interim API call budget"
+            )
         logging.info(f"  SOLAREDGE_DEBUG: {self.debug}")
         logging.info(f"  SOLAREDGE_LOG_LEVEL: {self.log_level}")
 
@@ -184,6 +188,14 @@ class Config:
             logging.info(f"  Forecast: enabled (lat={self.forecast_lat}, lon={self.forecast_lon}, tilt={self.forecast_tilt}, azimuth={self.forecast_azimuth}, kwp={self.forecast_kwp})")
         else:
             logging.info("  Forecast: disabled (incomplete configuration)")
+
+    def _awake_hours(self) -> int:
+        """Hours per day outside the sleep window (same rule as main.is_sleep_time)."""
+        start, end = self.sleep_start_hour, self.sleep_end_hour
+        if start == end:
+            return 24
+        sleep = (end - start) if start < end else (24 - start + end)
+        return 24 - sleep
 
     @staticmethod
     def _load_optional_float(key: str) -> Optional[float]:
