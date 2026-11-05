@@ -97,7 +97,26 @@ Plans:
   4. Verlauf Produktion and Verlauf Verbrauch show 14 daily bars from `/meters/telemetry?resolution=DAY`, bucketed by local date
   5. The codebase contains no V1 endpoints, no power-flow model/fetch, and no blanket urllib3 retry on 429/5xx (at most one retry on 5xx/timeout)
 
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 12-01-PLAN.md — EnergyDetails breakdown fields + Produktion/Verbrauch use direct values, screen render tests (wave 1)
+- [ ] 12-02-PLAN.md — FetchPlan interim cadence (D-07) + battery presence disk cache (wave 1)
+
+**Wave 2**
+
+- [ ] 12-03-PLAN.md — V2 client on TokenStore: overview, storage telemetry/status, devices, 14-day history; one retry on 5xx/timeout; V1 models removed (wave 2)
+- [ ] 12-04-PLAN.md — fetcher.py (fetch_round, today-bar patch, build_cycle) + config D-07 defaults, API key removed (wave 2)
+
+**Wave 3**
+
+- [ ] 12-05-PLAN.md — main.py wiring (battery cache, FetchPlan, rotation on cached values) + repo-wide V1 gate (wave 3)
+
+**Wave 4**
+
+- [ ] 12-06-PLAN.md — Live deploy on se-monitor with owner go-ahead, read-only journal checks, display check (wave 4, checkpoint)
 **UI hint**: yes
 
 ### Phase 13: Fetch Plan & Quota Guard
