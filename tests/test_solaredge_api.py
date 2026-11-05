@@ -398,5 +398,130 @@ class StorageTemperatureTests(unittest.TestCase):
         sleep.assert_not_called()
 
 
+NOW_HISTORY = datetime(2026, 11, 5, 9, 0, 0, tzinfo=SITE_TZ)
+HIST_DATES = [f"2026-10-{d}" for d in range(23, 32)] + [f"2026-11-0{d}" for d in range(1, 6)]
+
+
+def day_ts(date_str):
+    offset = "+02:00" if date_str <= "2026-10-24" else "+01:00"
+    return f"{date_str}T00:00:00{offset}"
+
+
+def energy_body(values_wh):
+    return {
+        "period": {},
+        "unit": "WH",
+        "resolution": "DAY",
+        "values": [{"timestamp": day_ts(d), "value": v} for d, v in zip(HIST_DATES, values_wh)],
+    }
+
+
+def meters_body(values_wh, extra=None):
+    meters = {
+        "CONSUMPTION": {
+            "consumptionEnergy": {
+                "unit": "WH",
+                "values": [{"timestamp": day_ts(d), "value": v} for d, v in zip(HIST_DATES, values_wh)],
+            }
+        }
+    }
+    if extra:
+        meters.update(extra)
+    return {"period": {}, "resolution": "DAY", "meters": meters}
+
+
+class HistoryTests(unittest.TestCase):
+    def setUp(self):
+        self.prod = [1000.0 * (i + 1) for i in range(14)]
+        self.cons = [500.0 * (i + 1) for i in range(14)]
+
+    def test_dates_and_production(self):
+        api, _, _ = make_api(
+            [fake_response(200, energy_body(self.prod)), fake_response(200, meters_body(self.cons))],
+            now=NOW_HISTORY,
+        )
+        h = api.get_energy_history()
+        self.assertIsInstance(h, EnergyHistory)
+        self.assertEqual(h.dates, HIST_DATES)
+        self.assertEqual(len(h.dates), 14)
+        self.assertEqual(h.production, [v / 1000.0 for v in self.prod])
+        self.assertEqual(h.consumption, [v / 1000.0 for v in self.cons])
+
+    def test_two_requests_and_windows(self):
+        api, store, _ = make_api(
+            [fake_response(200, energy_body(self.prod)), fake_response(200, meters_body(self.cons))],
+            now=NOW_HISTORY,
+        )
+        api.get_energy_history()
+        self.assertEqual(store.authorized_request.call_count, 2)
+        first, second = store.authorized_request.call_args_list
+        self.assertTrue(first.args[1].endswith("/energy"))
+        self.assertTrue(second.args[1].endswith("/meters/telemetry"))
+        self.assertEqual(first.kwargs["params"]["resolution"], "DAY")
+        self.assertEqual(first.kwargs["params"]["unit"], "WH")
+        self.assertEqual(second.kwargs["params"]["resolution"], "DAY")
+        for call in (first, second):
+            p = call.kwargs["params"]
+            self.assertTrue(p["from"].startswith("2026-10-23T00:00:00+02:00"))
+            self.assertIsNotNone(datetime.fromisoformat(p["from"]).tzinfo)
+            self.assertIsNotNone(datetime.fromisoformat(p["to"]).tzinfo)
+
+    def test_null_bucket_and_multi_meter(self):
+        cons = list(self.cons)
+        cons[3] = None
+        extra = {
+            "SN-METER-2": {"consumptionEnergy": {"unit": "WH", "values": [
+                {"timestamp": day_ts(HIST_DATES[0]), "value": 250.0}]}},
+            "PRODUCTION-ONLY": {"productionEnergy": {"unit": "WH", "values": [
+                {"timestamp": day_ts(HIST_DATES[0]), "value": 99999.0}]}},
+        }
+        api, _, _ = make_api(
+            [fake_response(200, energy_body(self.prod)), fake_response(200, meters_body(cons, extra))],
+            now=NOW_HISTORY,
+        )
+        h = api.get_energy_history()
+        self.assertEqual(h.consumption[3], 0.0)
+        self.assertAlmostEqual(h.consumption[0], 0.5 + 0.25)
+        self.assertAlmostEqual(h.consumption[1], 1.0)
+
+    def test_missing_date_is_zero(self):
+        body = energy_body(self.prod)
+        body["values"].pop(5)
+        api, _, _ = make_api(
+            [fake_response(200, body), fake_response(200, meters_body(self.cons))], now=NOW_HISTORY
+        )
+        h = api.get_energy_history()
+        self.assertEqual(h.production[5], 0.0)
+        self.assertEqual(h.production[6], 7.0)
+
+    def test_energy_failure_skips_meters(self):
+        api, store, sleep = make_api(
+            [fake_response(503), fake_response(200, meters_body(self.cons))], now=NOW_HISTORY
+        )
+        self.assertIsNone(api.get_energy_history())
+        self.assertEqual(store.authorized_request.call_count, 1)
+        sleep.assert_not_called()
+
+    def test_meters_failure_is_none(self):
+        api, store, _ = make_api(
+            [fake_response(200, energy_body(self.prod)), fake_response(503)], now=NOW_HISTORY
+        )
+        self.assertIsNone(api.get_energy_history())
+        self.assertEqual(store.authorized_request.call_count, 2)
+
+    def test_malformed_is_none(self):
+        api, _, _ = make_api(
+            [fake_response(200, {"unit": "WH"}), fake_response(200, meters_body(self.cons))], now=NOW_HISTORY
+        )
+        self.assertIsNone(api.get_energy_history())
+
+
+class ModelsCleanupTests(unittest.TestCase):
+    def test_v1_models_removed(self):
+        self.assertFalse(hasattr(models, "PowerFlow"))
+        self.assertFalse(hasattr(models, "SiteOverview"))
+        self.assertTrue(hasattr(solaredge_api, "SolarEdgeAPI"))
+
+
 if __name__ == "__main__":
     unittest.main()
