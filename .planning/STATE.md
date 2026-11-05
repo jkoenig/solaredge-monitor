@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: SolarEdge API V2
-status: planning
+status: executing
 stopped_at: Phase 11 UI-SPEC approved
-last_updated: "2026-11-05T12:02:12.413Z"
-last_activity: 2026-11-05 — v2.0 roadmap created (4 phases, 15/15 requirements mapped)
+last_updated: "2026-11-05T12:18:17.943Z"
+last_activity: 2026-11-05 -- Phase 11 execution started
 progress:
   total_phases: 4
   completed_phases: 0
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-05)
 
 **Core value:** Show the homeowner their solar energy state at a glance on a physical e-ink display that's always up to date.
-**Current focus:** v2.0 SolarEdge API V2 — Phase 11: OAuth Login & Token Store
+**Current focus:** Phase 11 — OAuth Login & Token Store
 
 ## Current Position
 
-Phase: 11 of 14 (OAuth Login & Token Store) — first phase of v2.0 (phases 11-14)
-Plan: — (not planned yet)
-Status: Ready to plan
-Last activity: 2026-11-05 — v2.0 roadmap created (4 phases, 15/15 requirements mapped)
+Phase: 11 (OAuth Login & Token Store) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 11
+Last activity: 2026-11-05 -- Phase 11 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
