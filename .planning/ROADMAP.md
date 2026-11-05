@@ -107,8 +107,8 @@ Plans:
 
 **Wave 2**
 
-- [ ] 12-03-PLAN.md — V2 client on TokenStore: overview, storage telemetry/status, devices, 14-day history; one retry on 5xx/timeout; V1 models removed (wave 2)
-- [ ] 12-04-PLAN.md — fetcher.py (fetch_round, today-bar patch, build_cycle) + config D-07 defaults, API key removed (wave 2)
+- [x] 12-03-PLAN.md — V2 client on TokenStore: overview, storage telemetry/status, devices, 14-day history; one retry on 5xx/timeout; V1 models removed (wave 2)
+- [x] 12-04-PLAN.md — fetcher.py (fetch_round, today-bar patch, build_cycle) + config D-07 defaults, API key removed (wave 2)
 
 **Wave 3**
 
@@ -158,7 +158,7 @@ Plans:
 | 9. Documentation | v1.1 | 1/1 | Complete | 2026-02-11 |
 | 10. Forecast Fix | v1.2 | 2/2 | Complete | 2026-02-12 |
 | 11. OAuth Login & Token Store | v2.0 | 5/5 | Complete    | 2026-11-05 |
-| 12. V2 Data Client & Screens | v2.0 | 2/6 | In Progress|  |
+| 12. V2 Data Client & Screens | v2.0 | 4/6 | In Progress|  |
 | 13. Fetch Plan & Quota Guard | v2.0 | 0/? | Not started | - |
 | 14. Docs & Deployment | v2.0 | 0/? | Not started | - |
 
