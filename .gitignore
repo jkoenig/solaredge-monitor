@@ -6,6 +6,8 @@
 # OAuth token store (token file plus tmp/upload/lock siblings)
 .tokens.json
 .tokens.json.*
+.battery.json
+.battery.json.*
 
 # Python
 __pycache__/
