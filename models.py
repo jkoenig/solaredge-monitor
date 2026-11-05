@@ -45,12 +45,18 @@ class EnergyDetails:
     Represents aggregated energy measurements for the current day. All values
     reset at midnight and accumulate throughout the day.
 
+    Source is the V2 site overview. All values are kWh, converted from the
+    response unit; null is 0.
+
     Fields:
-        production: Total PV production today in kWh
-        self_consumption: Energy consumed from own production in kWh
-        feed_in: Energy exported to grid in kWh
-        consumption: Total consumption today in kWh
-        purchased: Energy purchased from grid in kWh
+        production: production.total
+        self_consumption: production.toSelfConsumption
+        feed_in: production.toGrid
+        consumption: consumption.total
+        purchased: consumption.fromGrid
+        to_storage: production.toStorage (energy charged into the battery)
+        from_pv: consumption.fromPv (consumption covered directly by PV)
+        from_storage: consumption.fromStorage (consumption covered by the battery)
         fetched_at: Timestamp when data was retrieved
     """
     production: float
@@ -58,6 +64,9 @@ class EnergyDetails:
     feed_in: float
     consumption: float
     purchased: float
+    to_storage: float = 0.0
+    from_pv: float = 0.0
+    from_storage: float = 0.0
     fetched_at: datetime = field(default_factory=datetime.now)
 
 
@@ -105,11 +114,13 @@ class BatteryData:
     """Current battery state for Akku screen.
 
     Fields:
-        state_of_charge: Battery level 0-100% (from PowerFlow)
-        status: "Charge"/"Discharge"/"Idle" (from PowerFlow)
-        internal_temp: Battery temperature in °C (from storageData)
-        available_energy: Available energy in kWh (from storageData)
-        power: Battery power in kW (from storageData)
+        state_of_charge: stateOfEnergy (int %) from /storage/telemetry
+        status: "Charge"/"Discharge"/"Idle", derived from chargePower - dischargePower
+            with an idle threshold
+        internal_temp: Battery temperature in °C from /storage/status internalTemperature
+        available_energy: remainingEnergy in kWh, the energy currently stored,
+            NOT the pack size
+        power: Net battery power in kW, positive = charging
         fetched_at: Timestamp when data was retrieved
     """
     state_of_charge: int
@@ -129,7 +140,7 @@ class ForecastData:
     Fields:
         today_kwh: Forecasted production for today in kWh
         tomorrow_kwh: Forecasted production for tomorrow in kWh
-        actual_production: Actual PV production today in kWh (from EnergyDetails, for progress bar)
+        actual_production: Actual PV production today in kWh (from overview production.total, for progress bar)
         fetched_at: Timestamp when data was retrieved
     """
     today_kwh: float
