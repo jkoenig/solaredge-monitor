@@ -76,15 +76,13 @@ def render_consumption_screen(data: EnergyDetails) -> Image:
 
     bar_y = value_y + value_h + gap_value_bar
     bar_bbox = (MARGIN, bar_y, CANVAS_W - MARGIN, bar_y + bar_h)
-    percentage = min(100.0, (data.self_consumption / data.consumption) * 100.0) if data.consumption > 0 else 0.0
+    percentage = min(100.0, (data.from_pv / data.consumption) * 100.0) if data.consumption > 0 else 0.0
     draw_horizontal_bar(draw, bar_bbox, percentage, bar_font, legend=f"Davon {int(percentage)}% von PV-Anlage")
 
     content_width = CANVAS_W - 2 * MARGIN
     column_width = content_width // 3
 
-    battery_energy = max(0.0, data.consumption - data.self_consumption - data.purchased)
-
-    # Column 1: "Von PV" + self_consumption value
+    # Column 1: "Von PV" + direct consumption.fromPv value
     col1_x = MARGIN + column_width // 2
 
     label1 = "Von PV"
@@ -96,14 +94,14 @@ def render_consumption_screen(data: EnergyDetails) -> Image:
     label1_measured = draw.textbbox((label1_x, breakdown_y_start), label1, font=breakdown_label_font)
     label1_bottom = label1_measured[3]
 
-    value1 = f"{data.self_consumption:.1f} kWh"
+    value1 = f"{data.from_pv:.1f} kWh"
     value1_bbox = draw.textbbox((0, 0), value1, font=breakdown_value_font)
     value1_width = value1_bbox[2] - value1_bbox[0]
     value1_x = col1_x - value1_width // 2
     value1_y = label1_bottom + 8
     draw.text((value1_x, value1_y), value1, fill=0, font=breakdown_value_font)
 
-    # Column 2: "Von Akku" + battery energy
+    # Column 2: "Von Akku" + direct consumption.fromStorage value
     col2_x = MARGIN + column_width + column_width // 2
 
     label2 = "Von Akku"
@@ -115,7 +113,7 @@ def render_consumption_screen(data: EnergyDetails) -> Image:
     label2_measured = draw.textbbox((label2_x, breakdown_y_start), label2, font=breakdown_label_font)
     label2_bottom = label2_measured[3]
 
-    value2 = f"{battery_energy:.1f} kWh"
+    value2 = f"{data.from_storage:.1f} kWh"
     value2_bbox = draw.textbbox((0, 0), value2, font=breakdown_value_font)
     value2_width = value2_bbox[2] - value2_bbox[0]
     value2_x = col2_x - value2_width // 2
