@@ -22,7 +22,6 @@ def run_main(token_path, seconds=8):
     env = {
         "PATH": os.environ.get("PATH", ""),
         "HOME": os.environ.get("HOME", ""),
-        "SOLAREDGE_API_KEY": "dummykey1234",
         "SOLAREDGE_TOKEN_FILE": str(token_path),
         "SOLAREDGE_DEBUG": "true",
         "SOLAREDGE_SLEEP_START": "0",
