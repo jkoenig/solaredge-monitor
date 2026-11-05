@@ -188,3 +188,74 @@ class SolarEdgeAPI:
         n_active = sum(1 for d in body if isinstance(d, dict) and d.get("active") is True)
         logging.info(f"Battery detection: {n_active} active of {len(body)}")
         return n_active > 0
+
+    def get_battery_telemetry(self, internal_temp: float = 0.0) -> Optional[BatteryData]:
+        """SoC, net power, status and stored energy from /storage/telemetry.
+
+        Uses the last non-null value of each metric in a 1 h window. Missing or
+        all-null metrics count as 0. Temperature is passed in (it comes from
+        /storage/status on a slower cadence).
+        """
+        body = self._request(
+            "/sites/{site_id}/storage/telemetry",
+            {"resolution": "QUARTER_HOUR", **self._window(1)},
+        )
+        if body is None:
+            return None
+        try:
+            storage = body["storage"]
+            if not isinstance(storage, dict) or not storage:
+                logging.warning("Storage telemetry returned no battery")
+                return None
+            socs = []
+            net_w = 0.0
+            remaining_kwh = 0.0
+            for metrics in storage.values():
+                socs.append(self._metric_last(metrics, "stateOfEnergy"))
+                net_w += self._metric_last(metrics, "chargePower")
+                net_w -= self._metric_last(metrics, "dischargePower")
+                remaining = metrics.get("remainingEnergy") or {}
+                remaining_kwh += to_kwh(
+                    last_non_null(remaining.get("values")) or 0.0,
+                    remaining.get("unit", "WH"),
+                )
+            return BatteryData(
+                state_of_charge=int(round(sum(socs) / len(socs))),
+                status=derive_battery_status(net_w),
+                internal_temp=internal_temp,
+                available_energy=remaining_kwh,
+                power=net_w / 1000.0,
+            )
+        except (KeyError, ValueError, TypeError, AttributeError):
+            logging.error("Failed to parse storage telemetry response")
+            return None
+
+    @staticmethod
+    def _metric_last(metrics: dict, name: str) -> float:
+        metric = metrics.get(name) or {}
+        value = last_non_null(metric.get("values"))
+        return 0.0 if value is None else value
+
+    def get_storage_temperature(self) -> Optional[float]:
+        """Battery temperature in Celsius from /storage/status (0.0 when all null)."""
+        body = self._request(
+            "/sites/{site_id}/storage/status",
+            {"resolution": "QUARTER_HOUR", **self._window(2)},
+        )
+        if body is None:
+            return None
+        try:
+            storage = body["storage"]
+            if not isinstance(storage, dict):
+                raise TypeError("storage is not an object")
+            for key in sorted(storage):
+                temp = storage[key].get("internalTemperature")
+                if temp is None:
+                    continue
+                value = last_non_null(temp.get("values"))
+                return 0.0 if value is None else float(value)
+            logging.warning("Storage status returned no battery temperature")
+            return None
+        except (KeyError, ValueError, TypeError, AttributeError):
+            logging.error("Failed to parse storage status response")
+            return None
