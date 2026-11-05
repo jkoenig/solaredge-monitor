@@ -1,364 +1,190 @@
-"""SolarEdge API client with automatic retry logic.
+"""SolarEdge Monitoring API V2 client on top of the Phase 11 TokenStore.
 
-This module provides a client for the SolarEdge Monitoring API that handles
-authentication, retry logic, and response parsing. All API errors are logged
-and handled gracefully by returning None, allowing the application to continue
-with stale data rather than crashing.
+Every request goes through TokenStore.authorized_request (Bearer token, one
+refresh on 401). Every call costs one API credit, so there is no blanket retry:
+only get_overview may retry, once, on 5xx or timeout. All other jobs make one
+attempt. 400/403/404/429 are never retried.
 
-The client uses exponential backoff (2s, 4s, 8s) for transient failures and
-includes a 10-second timeout per request.
+All public methods return None on any fetch or parse failure so the caller can
+keep showing stale data. LoginRequired is deliberately not caught: it
+propagates to main.py, which shows the login screen.
+
+Logs never contain the site id, serial numbers, tokens, params or response
+bodies. Endpoints are logged as path templates with a literal "{site_id}".
 """
 
 import logging
+import time
 from datetime import datetime, timedelta
-from typing import Optional
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util import Retry
+from typing import Callable, Optional
+from zoneinfo import ZoneInfo
 
-from models import PowerFlow, EnergyDetails, EnergyHistory, SiteOverview
+import requests
+
+from models import BatteryData, EnergyDetails, EnergyHistory
+from token_store import TransientAuthError
+
+SITE_TZ = ZoneInfo("Europe/Zurich")
+BASE_URL = "https://monitoringapi.solaredge.com/v2"
+IDLE_THRESHOLD_W = 50
+
+_UNIT_FACTORS_TO_KWH = {
+    "WH": 0.001,
+    "KWH": 1.0,
+    "MWH": 1000.0,
+    "GWH": 1_000_000.0,
+}
+
+RETRY_SLEEP_SECONDS = 2
+
+
+def to_kwh(value, unit) -> float:
+    """Convert a value in WH/KWH/MWH/GWH to kWh. None becomes 0.0.
+
+    Raises ValueError for an unknown unit.
+    """
+    if value is None:
+        return 0.0
+    factor = _UNIT_FACTORS_TO_KWH.get(str(unit).upper())
+    if factor is None:
+        raise ValueError("unknown energy unit")
+    return float(value) * factor
+
+
+def last_non_null(values) -> Optional[float]:
+    """Return the last non-null "value" of a list of {"timestamp","value"} dicts."""
+    for entry in reversed(values or []):
+        if isinstance(entry, dict) and entry.get("value") is not None:
+            return float(entry["value"])
+    return None
+
+
+def derive_battery_status(net_power_w: float, threshold_w: float = IDLE_THRESHOLD_W) -> str:
+    """Return "Charge", "Discharge" or "Idle" from net power (positive = charging)."""
+    if net_power_w > threshold_w:
+        return "Charge"
+    if net_power_w < -threshold_w:
+        return "Discharge"
+    return "Idle"
 
 
 class SolarEdgeAPI:
-    """Client for SolarEdge Monitoring API with automatic retry.
+    """V2 client. Construct with a TokenStore; site id comes from the store."""
 
-    Handles all communication with the SolarEdge API, including authentication,
-    retry logic for transient failures, and parsing responses into typed data models.
+    def __init__(
+        self,
+        token_store,
+        sleep: Callable[[float], None] = time.sleep,
+        now_fn: Optional[Callable[[], datetime]] = None,
+    ):
+        self.token_store = token_store
+        self._sleep = sleep
+        self._now_fn = now_fn or (lambda: datetime.now(SITE_TZ))
 
-    Attributes:
-        api_key: SolarEdge API key for authentication
-        site_id: Site identifier for API requests
-        base_url: Base URL for the SolarEdge Monitoring API
-        session: Requests session configured with retry logic
-    """
+    def _now(self) -> datetime:
+        return self._now_fn()
 
-    def __init__(self, api_key: str, site_id: str):
-        """Initialize API client with retry configuration.
-
-        Args:
-            api_key: SolarEdge API key
-            site_id: Site identifier
-        """
-        self.api_key = api_key
-        self.site_id = site_id
-        self.base_url = "https://monitoringapi.solaredge.com"
-
-        # Configure retry: 3 attempts, exponential backoff (2s, 4s, 8s)
-        retry_strategy = Retry(
-            total=3,
-            backoff_factor=2,
-            status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["GET"]
-        )
-
-        # Create session with retry adapter
-        self.session = requests.Session()
-        adapter = HTTPAdapter(max_retries=retry_strategy)
-        self.session.mount("https://", adapter)
-        self.session.mount("http://", adapter)
-
-    def _request(self, endpoint: str, params: dict = None) -> Optional[dict]:
-        """Execute API request with retry and error handling.
-
-        Logs errors internally and returns None on failure, allowing the caller
-        to continue with stale data or handle the failure gracefully.
-
-        Args:
-            endpoint: API endpoint path (e.g., "/site/123/overview")
-            params: Additional query parameters (api_key added automatically)
-
-        Returns:
-            dict: JSON response on success
-            None: On complete failure after retries
-        """
-        url = f"{self.base_url}{endpoint}"
-        params = params or {}
-        params["api_key"] = self.api_key
-
-        try:
-            response = self.session.get(url, params=params, timeout=10)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.Timeout:
-            logging.error(f"API timeout after 10s: {endpoint}")
-            return None
-        except requests.exceptions.HTTPError as e:
-            logging.error(f"API HTTP error {e.response.status_code}: {endpoint}")
-            return None
-        except requests.exceptions.RequestException as e:
-            logging.error(f"API request failed: {endpoint} - {e}")
-            return None
-
-    def get_current_power_flow(self) -> Optional[PowerFlow]:
-        """Fetch current power flow between system elements.
-
-        Retrieves real-time power measurements showing energy flow between
-        the grid, PV panels, battery, and load.
-
-        Returns:
-            PowerFlow: Current system state with power values in kW
-            None: If API request fails after retries
-        """
-        endpoint = f"/site/{self.site_id}/currentPowerFlow"
-        data = self._request(endpoint)
-
-        if data is None:
-            logging.warning("Failed to fetch power flow")
-            return None
-
-        try:
-            flow = data["siteCurrentPowerFlow"]
-
-            # Detect off-grid state from connections array
-            # If first connection is not from grid, system is off-grid
-            off_grid = False
-            connections = flow.get("connections", [])
-            if connections and connections[0].get("from", "").lower() != "grid":
-                off_grid = True
-
-            return PowerFlow(
-                grid_power=float(flow["GRID"]["currentPower"]),
-                load_power=float(flow["LOAD"]["currentPower"]),
-                pv_power=float(flow["PV"]["currentPower"]),
-                storage_power=float(flow["STORAGE"]["currentPower"]),
-                storage_status=flow["STORAGE"]["status"],
-                state_of_charge=int(flow["STORAGE"]["chargeLevel"]),
-                off_grid=off_grid
-            )
-        except (KeyError, ValueError, TypeError) as e:
-            logging.error(f"Failed to parse power flow response: {e}")
-            return None
-
-    def get_energy_details(self) -> Optional[EnergyDetails]:
-        """Fetch today's cumulative energy data.
-
-        Retrieves aggregated energy measurements for the current day, including
-        production, consumption, and grid interactions.
-
-        Returns:
-            EnergyDetails: Today's energy totals in kWh
-            None: If API request fails after retries
-        """
-        endpoint = f"/site/{self.site_id}/energyDetails"
-
-        # Query today's data with all relevant meters
-        today = datetime.now().strftime("%Y-%m-%d")
-        params = {
-            "meters": "Purchased,FeedIn,Production,SelfConsumption,Consumption",
-            "startTime": f"{today} 00:00:00",
-            "endTime": f"{today} 23:59:59"
+    def _window(self, hours: float) -> dict:
+        """Offset-bearing from/to strings covering the last `hours` hours."""
+        now = self._now()
+        start = now - timedelta(hours=hours)
+        return {
+            "from": start.isoformat(timespec="seconds"),
+            "to": now.isoformat(timespec="seconds"),
         }
 
-        data = self._request(endpoint, params)
+    def _request(self, path_template: str, params: Optional[dict] = None, retry: bool = False):
+        """GET a V2 path. Returns parsed JSON or None. LoginRequired propagates."""
+        url = BASE_URL + path_template.format(site_id=self.token_store.site_id)
+        attempts = 2 if retry else 1
+        for attempt in range(1, attempts + 1):
+            try:
+                resp = self.token_store.authorized_request("GET", url, params=params)
+            except requests.exceptions.Timeout:
+                if attempt < attempts:
+                    logging.warning(f"API timeout: {path_template} (attempt {attempt}), retrying")
+                    self._sleep(RETRY_SLEEP_SECONDS)
+                    continue
+                logging.error(f"API timeout: {path_template}")
+                return None
+            except TransientAuthError:
+                logging.warning(f"API auth refresh deferred: {path_template}")
+                return None
+            except requests.exceptions.RequestException as e:
+                logging.error(f"API request failed: {path_template} ({type(e).__name__})")
+                return None
 
-        if data is None:
-            logging.warning("Failed to fetch energy details")
+            status = resp.status_code
+            logging.info(f"API {path_template} -> {status}")
+
+            if status >= 500:
+                if attempt < attempts:
+                    logging.warning(f"API HTTP {status}: {path_template} (attempt {attempt}), retrying")
+                    self._sleep(RETRY_SLEEP_SECONDS)
+                    continue
+                logging.error(f"API HTTP error {status}: {path_template}")
+                return None
+            if status == 429:
+                remaining = None
+                try:
+                    remaining = resp.headers.get("x-ratelimit-remaining-minute")
+                except AttributeError:
+                    pass
+                logging.error(
+                    f"API HTTP error 429: {path_template} "
+                    f"(x-ratelimit-remaining-minute={remaining})"
+                )
+                return None
+            if status >= 400:
+                logging.error(f"API HTTP error {status}: {path_template}")
+                return None
+
+            try:
+                return resp.json()
+            except ValueError:
+                logging.error(f"API response is not JSON: {path_template}")
+                return None
+        return None
+
+    def get_overview(self, retry: bool = True) -> Optional[EnergyDetails]:
+        """Today's energy totals from /overview (kWh, null becomes 0.0)."""
+        body = self._request("/sites/{site_id}/overview", retry=retry)
+        if body is None:
             return None
-
         try:
-            meters = data["energyDetails"]["meters"]
+            if not isinstance(body, dict):
+                raise TypeError("overview body is not an object")
 
-            # Extract values by meter type and convert Wh to kWh
-            production = 0.0
-            self_consumption = 0.0
-            feed_in = 0.0
-            consumption = 0.0
-            purchased = 0.0
+            def section(name):
+                obj = body.get(name)
+                if obj is None:
+                    return {}, "WH"
+                return obj, obj.get("unit", "WH")
 
-            for meter in meters:
-                meter_type = meter.get("type", "")
-                values = meter.get("values", [])
-                # Sum all values for the day and convert Wh to kWh
-                total_wh = sum(v.get("value", 0) for v in values if v.get("value") is not None)
-                total_kwh = total_wh / 1000.0
-
-                if meter_type == "Production":
-                    production = total_kwh
-                elif meter_type == "SelfConsumption":
-                    self_consumption = total_kwh
-                elif meter_type == "FeedIn":
-                    feed_in = total_kwh
-                elif meter_type == "Consumption":
-                    consumption = total_kwh
-                elif meter_type == "Purchased":
-                    purchased = total_kwh
-
+            prod, prod_unit = section("production")
+            cons, cons_unit = section("consumption")
             return EnergyDetails(
-                production=production,
-                self_consumption=self_consumption,
-                feed_in=feed_in,
-                consumption=consumption,
-                purchased=purchased
+                production=to_kwh(prod.get("total"), prod_unit),
+                self_consumption=to_kwh(prod.get("toSelfConsumption"), prod_unit),
+                feed_in=to_kwh(prod.get("toGrid"), prod_unit),
+                to_storage=to_kwh(prod.get("toStorage"), prod_unit),
+                consumption=to_kwh(cons.get("total"), cons_unit),
+                purchased=to_kwh(cons.get("fromGrid"), cons_unit),
+                from_pv=to_kwh(cons.get("fromPv"), cons_unit),
+                from_storage=to_kwh(cons.get("fromStorage"), cons_unit),
             )
-        except (KeyError, ValueError, TypeError) as e:
-            logging.error(f"Failed to parse energy details response: {e}")
+        except (KeyError, ValueError, TypeError, AttributeError):
+            logging.error("Failed to parse overview response")
             return None
 
-    def get_site_overview(self) -> Optional[SiteOverview]:
-        """Fetch site overview with historical data.
-
-        Retrieves aggregate energy production statistics over various time periods,
-        from a single day to the lifetime of the installation.
-
-        Returns:
-            SiteOverview: Historical energy production data
-            None: If API request fails after retries
-        """
-        endpoint = f"/site/{self.site_id}/overview"
-        data = self._request(endpoint)
-
-        if data is None:
-            logging.warning("Failed to fetch site overview")
+    def detect_battery(self) -> Optional[bool]:
+        """True if at least one BATTERY device is active, None if unknown."""
+        body = self._request("/sites/{site_id}/devices", {"types": "BATTERY"})
+        if body is None:
             return None
-
-        try:
-            overview = data["overview"]
-
-            return SiteOverview(
-                last_update_time=overview.get("lastUpdateTime", ""),
-                lifetime_energy=float(overview.get("lifeTimeData", {}).get("energy", 0.0)) / 1_000_000.0,  # Wh to MWh
-                last_year_energy=float(overview.get("lastYearData", {}).get("energy", 0.0)) / 1000.0,  # Wh to kWh
-                last_month_energy=float(overview.get("lastMonthData", {}).get("energy", 0.0)) / 1000.0,  # Wh to kWh
-                last_day_energy=float(overview.get("lastDayData", {}).get("energy", 0.0)) / 1000.0  # Wh to kWh
-            )
-        except (KeyError, ValueError, TypeError) as e:
-            logging.error(f"Failed to parse site overview response: {e}")
+        if not isinstance(body, list):
+            logging.error("Failed to parse devices response")
             return None
-
-    def has_battery(self) -> bool:
-        """Check if site has a battery via inventory API.
-
-        Called once at startup to determine whether to show the Akku screen.
-
-        Returns:
-            True if site has at least one battery, False otherwise
-        """
-        endpoint = f"/site/{self.site_id}/inventory"
-        data = self._request(endpoint)
-
-        if data is None:
-            logging.warning("Failed to fetch inventory, assuming no battery")
-            return False
-
-        try:
-            batteries = data.get("Inventory", {}).get("batteries", [])
-            return len(batteries) > 0
-        except (TypeError, AttributeError) as e:
-            logging.error(f"Failed to parse inventory response: {e}")
-            return False
-
-    def get_energy_history(self, days: int = 14) -> Optional[EnergyHistory]:
-        """Fetch daily energy history for histogram screens.
-
-        Calls /energyDetails with timeUnit=DAY over a 14-day range.
-        Returns production and consumption per day in kWh.
-
-        Args:
-            days: Number of days of history (default 14)
-
-        Returns:
-            EnergyHistory with daily values, or None on failure
-        """
-        endpoint = f"/site/{self.site_id}/energyDetails"
-
-        today = datetime.now()
-        start = today - timedelta(days=days - 1)
-        params = {
-            "meters": "Production,Consumption",
-            "timeUnit": "DAY",
-            "startTime": start.strftime("%Y-%m-%d 00:00:00"),
-            "endTime": today.strftime("%Y-%m-%d 23:59:59"),
-        }
-
-        data = self._request(endpoint, params)
-
-        if data is None:
-            logging.warning("Failed to fetch energy history")
-            return None
-
-        try:
-            meters = data["energyDetails"]["meters"]
-
-            # Build date-indexed maps for each meter
-            production_by_date = {}
-            consumption_by_date = {}
-
-            for meter in meters:
-                meter_type = meter.get("type", "")
-                target = None
-                if meter_type == "Production":
-                    target = production_by_date
-                elif meter_type == "Consumption":
-                    target = consumption_by_date
-
-                if target is not None:
-                    for entry in meter.get("values", []):
-                        date_str = entry.get("date", "")[:10]  # "YYYY-MM-DD"
-                        value_wh = entry.get("value")
-                        target[date_str] = (value_wh or 0) / 1000.0
-
-            # Build ordered lists for each day
-            dates = []
-            production = []
-            consumption = []
-            for i in range(days):
-                d = (start + timedelta(days=i)).strftime("%Y-%m-%d")
-                dates.append(d)
-                production.append(production_by_date.get(d, 0.0))
-                consumption.append(consumption_by_date.get(d, 0.0))
-
-            return EnergyHistory(
-                dates=dates,
-                production=production,
-                consumption=consumption,
-            )
-        except (KeyError, ValueError, TypeError) as e:
-            logging.error(f"Failed to parse energy history response: {e}")
-            return None
-
-    def get_storage_data(self) -> Optional[dict]:
-        """Fetch latest battery telemetry from storageData API.
-
-        Queries the last 2 hours to ensure we get at least one data point.
-        Returns the most recent telemetry entry.
-
-        Returns:
-            dict with internal_temp (°C), available_energy (kWh), power (kW)
-            None on failure or no data
-        """
-        endpoint = f"/site/{self.site_id}/storageData"
-
-        now = datetime.now()
-        start = now - timedelta(hours=2)
-        params = {
-            "startTime": start.strftime("%Y-%m-%d %H:%M:%S"),
-            "endTime": now.strftime("%Y-%m-%d %H:%M:%S"),
-        }
-
-        data = self._request(endpoint, params)
-
-        if data is None:
-            logging.warning("Failed to fetch storage data")
-            return None
-
-        try:
-            batteries = data.get("storageData", {}).get("batteries", [])
-            if not batteries:
-                logging.warning("No batteries in storage data response")
-                return None
-
-            telemetries = batteries[0].get("telemetries", [])
-            if not telemetries:
-                logging.warning("No telemetry entries in storage data")
-                return None
-
-            # Use the last (most recent) entry
-            latest = telemetries[-1]
-            return {
-                "internal_temp": float(latest.get("internalTemp", 0)),
-                "available_energy": float(latest.get("fullPackEnergyAvailable", 0)) / 1000.0,
-                "power": float(latest.get("power", 0)) / 1000.0,
-            }
-        except (KeyError, ValueError, TypeError, IndexError) as e:
-            logging.error(f"Failed to parse storage data response: {e}")
-            return None
+        n_active = sum(1 for d in body if isinstance(d, dict) and d.get("active") is True)
+        logging.info(f"Battery detection: {n_active} active of {len(body)}")
+        return n_active > 0
