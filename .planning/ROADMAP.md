@@ -112,7 +112,7 @@ Plans:
 
 **Wave 3**
 
-- [ ] 12-05-PLAN.md — main.py wiring (battery cache, FetchPlan, rotation on cached values) + repo-wide V1 gate (wave 3)
+- [x] 12-05-PLAN.md — main.py wiring (battery cache, FetchPlan, rotation on cached values) + repo-wide V1 gate (wave 3)
 
 **Wave 4**
 
@@ -158,7 +158,7 @@ Plans:
 | 9. Documentation | v1.1 | 1/1 | Complete | 2026-02-11 |
 | 10. Forecast Fix | v1.2 | 2/2 | Complete | 2026-02-12 |
 | 11. OAuth Login & Token Store | v2.0 | 5/5 | Complete    | 2026-11-05 |
-| 12. V2 Data Client & Screens | v2.0 | 4/6 | In Progress|  |
+| 12. V2 Data Client & Screens | v2.0 | 5/6 | In Progress|  |
 | 13. Fetch Plan & Quota Guard | v2.0 | 0/? | Not started | - |
 | 14. Docs & Deployment | v2.0 | 0/? | Not started | - |
 
