@@ -8,6 +8,17 @@ A Raspberry Pi Zero WH-powered e-ink display monitor that shows daily SolarEdge 
 
 Show the homeowner their solar energy state at a glance — production, consumption, feed-in, purchased — on a physical e-ink display that's always up to date.
 
+## Current Milestone: v2.0 SolarEdge API V2
+
+**Goal:** Der Monitor zeigt wieder echte Daten: Abruf über die SolarEdge Monitoring API V2 mit OAuth2, dauerhaft unter 2000 Abfragen pro Monat.
+
+**Target features:**
+- Einmaliges Login-Skript auf dem Mac (Browser-Freigabe, Callback auf http://localhost:8765/callback), das das erste Token-Paar auf den Pi bringt
+- Token-Speicher auf dem Pi (0600), rotierender Refresh-Token wird bei jeder Erneuerung sofort atomar gesichert
+- solaredge_api.py auf monitoringapi.solaredge.com/v2 umgebaut (Overview, Energiedetails, Batterie, Inventory; Power-Flow nur falls ohne Advanced Monitoring verfügbar)
+- Sparsamer Abfrageplan: ca. alle 30 Min. 1–2 Abfragen, nur tagsüber (~7–20 Uhr), Bildschirme rotieren auf Cache; Kontingentzähler als Sicherung
+- Klarer Display-Hinweis bei fehlendem/ungültigem Token statt stillem Absturz; README und .env.example aktualisiert
+
 ## Requirements
 
 ### Validated
@@ -40,13 +51,16 @@ Show the homeowner their solar energy state at a glance — production, consumpt
 
 ### Active
 
-(No active requirements — all milestones shipped)
+- [ ] OAuth2-Login (einmalig, Mac) und automatische Token-Erneuerung auf dem Pi
+- [ ] Datenabruf über Monitoring API V2 statt V1 (V1 liefert seit 2026-11-03 HTTP 410)
+- [ ] Abfrageplan innerhalb 2000 Abfragen/Monat
+- [ ] Verständlicher Fehlerzustand auf dem Display bei Auth-Problemen
 
 ### Out of Scope
 
 - Multi-display support — single Pi, single display
 - Web dashboard or API — this is a dedicated hardware display
-- Database or persistent storage — stateless monitor, fresh data each cycle
+- Database — only state is the OAuth token file and a small quota counter (needed since v2.0)
 - Multiple SolarEdge sites — single site monitor
 - Notifications or alerts — display-only
 - Paid Forecast.Solar tier — free tier sufficient (today + tomorrow, 12 req/hour)
@@ -67,7 +81,8 @@ Future ideas from requirements: PowerFlow display (real-time watts), SiteOvervie
 
 - **Hardware**: Waveshare 2.13" V3 e-ink display (250x122 pixels, 1-bit black/white) — fixed display size
 - **Platform**: Raspberry Pi Zero WH (ARM, 1 GHz, 512 MB RAM) — very constrained, no Docker
-- **API**: SolarEdge monitoring API — rate limits apply, ~15 min data freshness
+- **API**: SolarEdge Monitoring API V2 — OAuth2 Site Access (scopes SITE_DATA, DEVICE_DATA), 2000 requests/month, ~15 min data freshness; V1 shut down 2026-11-03
+- **Secrets**: Client-ID/Secret in 1Password (item 7rboxat3in2tlx2ywilmsna5cy), never in git
 - **API**: Forecast.Solar free tier — 12 req/hour, today + tomorrow only
 - **Display**: SPI/GPIO access required directly (no container layer)
 - **Network**: Pi needs network access for API calls
@@ -80,7 +95,7 @@ Future ideas from requirements: PowerFlow display (real-time watts), SiteOvervie
 | Fresh git repo instead of history rewrite | Simplest way to remove credentials, existing history has no significant value | ✓ Good |
 | Environment variables for credentials | Standard practice, .env file for Pi deployment | ✓ Good |
 | Git pull + systemd for deployment | Pi Zero WH too constrained for Docker/Kamal (512 MB RAM) | ✓ Good |
-| 5-minute polling interval | SolarEdge data updates ~15 min, 5 min balances freshness vs API load | ✓ Good |
+| 5-minute polling interval | SolarEdge data updates ~15 min, 5 min balances freshness vs API load | ⚠️ Revisit — V2 quota (2000/month) forces ~30 min, daylight only |
 | Keep 2.13" display | User confirmed, improve readability through better font/layout choices | ✓ Good |
 | Cycle through screens | User preference over single dashboard — keeps each screen focused and readable | ✓ Good |
 | SolarEdge only | Strip VW, BMW, disk monitoring — focused single-purpose tool | ✓ Good |
@@ -97,5 +112,22 @@ Future ideas from requirements: PowerFlow display (real-time watts), SiteOvervie
 | Fixed-text sizing for bar labels | Matches production.py pattern, makes layout data-independent | ✓ Good |
 | Save docs screenshots at canvas resolution | 1000x488 for documentation, 250x122 only for display pipeline | ✓ Good |
 
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd:transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd:complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
+
 ---
-*Last updated: 2026-02-12 after v1.2 milestone complete*
+*Last updated: 2026-11-05 after starting v2.0 milestone*
