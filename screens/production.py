@@ -82,8 +82,6 @@ def render_production_screen(data: EnergyDetails) -> Image:
     content_width = CANVAS_W - 2 * MARGIN
     column_width = content_width // 3
 
-    battery_energy = max(0.0, data.production - data.self_consumption - data.feed_in)
-
     # Column 1: "Eigenverbrauch" + self_consumption value
     col1_x = MARGIN + column_width // 2
 
@@ -103,7 +101,7 @@ def render_production_screen(data: EnergyDetails) -> Image:
     value1_y = label1_bottom + 8
     draw.text((value1_x, value1_y), value1, fill=0, font=breakdown_value_font)
 
-    # Column 2: "In Akku" + battery energy
+    # Column 2: "In Akku" + direct production.toStorage value
     col2_x = MARGIN + column_width + column_width // 2
 
     label2 = "In Akku"
@@ -115,7 +113,7 @@ def render_production_screen(data: EnergyDetails) -> Image:
     label2_measured = draw.textbbox((label2_x, breakdown_y_start), label2, font=breakdown_label_font)
     label2_bottom = label2_measured[3]
 
-    value2 = f"{battery_energy:.1f} kWh"
+    value2 = f"{data.to_storage:.1f} kWh"
     value2_bbox = draw.textbbox((0, 0), value2, font=breakdown_value_font)
     value2_width = value2_bbox[2] - value2_bbox[0]
     value2_x = col2_x - value2_width // 2
