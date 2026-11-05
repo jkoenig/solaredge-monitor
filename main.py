@@ -7,13 +7,16 @@ Production polling loop that:
 - Cycles through 4 display screens at 60 seconds each
 - Sleeps between midnight and 6 AM (configurable)
 - Shows error screen after 3 consecutive API failures
+- Shows "Login nötig" (and makes no calls) while the OAuth token is missing,
+  corrupt or rejected; resumes automatically when the token file or .env changes
 - Clears display on graceful shutdown (SIGTERM/SIGINT)
 
 Run with: python3 main.py
 
 Requires .env file with:
   SOLAREDGE_API_KEY=your_api_key
-  SOLAREDGE_SITE_ID=your_site_id
+The site id comes from the token file; client id/secret are written to .env
+by the Mac login script.
 """
 
 import logging
@@ -40,7 +43,11 @@ from forecast_api import ForecastSolarAPI
 from display import Display
 from models import BatteryData, ForecastData
 from screens import get_screens
-from screens.error import render_error_screen
+from screens.error import render_error_screen, render_login_required_screen
+from token_store import TokenStore, TokenFileWatcher, LoginRequired, TransientAuthError
+
+# Interval for checking token file / .env while login is needed (D-12)
+TOKEN_CHECK_INTERVAL_SECONDS = 60
 
 
 # Module-level state
@@ -147,6 +154,17 @@ def fetch_data(api: SolarEdgeAPI, has_battery: bool = False, forecast_api: Forec
     return energy_details, battery_data, history_data, forecast_data
 
 
+def init_site_clients(config: Config, site_id: str, has_forecast: bool):
+    """Create the SolarEdge client, detect battery and build the screen list."""
+    api = SolarEdgeAPI(config.api_key, site_id)
+    battery_detected = api.has_battery()
+    logging.info(f"Battery detected: {battery_detected}")
+    screens = get_screens(has_battery=battery_detected, has_forecast_config=has_forecast)
+    screen_names = [name for _, _, name in screens]
+    logging.info(f"Screen rotation: {', '.join(screen_names)}")
+    return api, battery_detected, screens
+
+
 def run_screen_cycle(display: Display, cycle: list) -> None:
     """
     Cycle through screens, displaying each for 60 seconds.
@@ -194,14 +212,20 @@ def main():
     logging.info("SolarEdge Off-Grid Monitor starting")
     config.log_startup()
 
-    # Create API client and display
-    api = SolarEdgeAPI(config.api_key, config.site_id)
+    # Create display
     display = Display(debug_mode=config.debug)
     logging.info(f"Display initialized (backend: {display.backend})")
 
-    # Detect battery at startup
-    battery_detected = api.has_battery()
-    logging.info(f"Battery detected: {battery_detected}")
+    # Token store (API client is created lazily once a usable token exists)
+    token_store = TokenStore(
+        config.token_file, config.client_id, config.client_secret, env_file=config.env_file
+    )
+    watcher = TokenFileWatcher(config.token_file, config.env_file)
+    api = None
+    battery_detected = False
+    screens = []
+    initialized_site_id = None
+    site_mismatch_logged = False
 
     # Detect forecast configuration
     has_forecast = config.has_forecast_config()
@@ -218,11 +242,6 @@ def main():
     else:
         logging.info("Forecast disabled: incomplete FORECAST_* configuration")
 
-    # Build dynamic screen list
-    screens = get_screens(has_battery=battery_detected, has_forecast_config=has_forecast)
-    screen_names = [name for _, _, name in screens]
-    logging.info(f"Screen rotation: {', '.join(screen_names)}")
-
     # Initialize polling state
     consecutive_failures = 0
     MAX_FAILURES = 3
@@ -233,6 +252,21 @@ def main():
     poll_interval_seconds = config.poll_interval * 60
     in_sleep = False
     next_poll = time.monotonic()  # Poll immediately on startup
+    login_needed = False
+    login_screen_shown = False
+    next_token_check = 0.0
+
+    def enter_login_state(reason: str) -> None:
+        nonlocal login_needed, next_token_check
+        logging.warning(f"Login required: {reason}")
+        login_needed = True
+        watcher.reset()
+        next_token_check = time.monotonic() + TOKEN_CHECK_INTERVAL_SECONDS
+
+    try:
+        token_store.load()
+    except LoginRequired as e:
+        enter_login_state(e.reason)
 
     try:
         while not shutdown_flag:
@@ -249,7 +283,35 @@ def main():
                 if in_sleep:
                     logging.info("Waking from sleep mode")
                     in_sleep = False
+                    login_screen_shown = False  # redraw after display.clear()
                     next_poll = time.monotonic()  # Force immediate poll after wake
+
+            # Login-needed state: only the login screen, no calls (D-07..D-09)
+            if login_needed:
+                if not login_screen_shown:
+                    display.render(render_login_required_screen(), "login")
+                    login_screen_shown = True
+                if time.monotonic() >= next_token_check:
+                    next_token_check = time.monotonic() + TOKEN_CHECK_INTERVAL_SECONDS
+                    if watcher.has_changed():
+                        logging.info("Token file or .env changed, re-checking login")
+                        token_store.reload_credentials()
+                        try:
+                            token_store.get_access_token()
+                            logging.info("Login OK, resuming")
+                            login_needed = False
+                            login_screen_shown = False
+                            consecutive_failures = 0
+                            next_poll = time.monotonic()
+                        except LoginRequired as e:
+                            logging.warning(f"Login still required: {e.reason}")
+                        except TransientAuthError as e:
+                            logging.warning(f"Token check deferred, resuming: {e}")
+                            login_needed = False
+                            login_screen_shown = False
+                            next_poll = time.monotonic()
+                interruptible_sleep(1)
+                continue
 
             # Check if it's time to poll
             now = time.monotonic()
@@ -259,6 +321,29 @@ def main():
 
             # Fetch data
             logging.info("Starting poll cycle")
+
+            # Refresh token if close to expiry (keeps the 14-day chain alive)
+            try:
+                token_store.get_access_token()
+            except LoginRequired as e:
+                enter_login_state(e.reason)
+                continue
+            except TransientAuthError as e:
+                logging.warning(f"Token refresh deferred: {e}")
+            token_store.warn_if_grant_expiring()
+
+            try:
+                token_site_id = token_store.site_id
+            except LoginRequired as e:
+                enter_login_state(e.reason)
+                continue
+            if initialized_site_id != token_site_id:
+                api, battery_detected, screens = init_site_clients(config, token_site_id, has_forecast)
+                initialized_site_id = token_site_id
+            if config.site_id and config.site_id != token_site_id and not site_mismatch_logged:
+                logging.warning("Configured SOLAREDGE_SITE_ID differs from token site id; using token site id")
+                site_mismatch_logged = True
+
             energy_details, battery_data, history_data, forecast_data = fetch_data(api, has_battery=battery_detected, forecast_api=forecast_api)
 
             if energy_details is not None:
