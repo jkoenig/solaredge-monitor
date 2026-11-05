@@ -49,12 +49,27 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| AUTH-01 | Phase 11 | Pending |
+| AUTH-02 | Phase 11 | Pending |
+| AUTH-03 | Phase 11 | Pending |
+| AUTH-04 | Phase 11 | Pending |
+| API-01 | Phase 12 | Pending |
+| API-02 | Phase 12 | Pending |
+| API-03 | Phase 12 | Pending |
+| API-04 | Phase 12 | Pending |
+| API-05 | Phase 12 | Pending |
+| QUOTA-01 | Phase 13 | Pending |
+| QUOTA-02 | Phase 13 | Pending |
+| QUOTA-03 | Phase 13 | Pending |
+| OPS-01 | Phase 14 | Pending |
+| OPS-02 | Phase 14 | Pending |
+| OPS-03 | Phase 14 | Pending |
 
 **Coverage:**
 - v2.0 requirements: 15 total
-- Mapped to phases: 0
-- Unmapped: 15
+- Mapped to phases: 15
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-11-05*
-*Last updated: 2026-11-05 after initial definition*
+*Last updated: 2026-11-05 after roadmap creation (phases 11-14)*

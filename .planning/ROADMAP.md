@@ -5,6 +5,7 @@
 - ✅ **v1.0 MVP** — Phases 1-6 (shipped 2026-02-07)
 - ✅ **v1.1 Forecast Screen** — Phases 7-9 (shipped 2026-02-11)
 - ✅ **v1.2 Forecast Fix** — Phase 10 (shipped 2026-02-12)
+- 🚧 **v2.0 SolarEdge API V2** — Phases 11-14 (in progress)
 
 ## Phases
 
@@ -40,7 +41,66 @@ Plans:
 
 </details>
 
+### 🚧 v2.0 SolarEdge API V2 (Phases 11-14)
+
+**Milestone goal:** The monitor shows real data again, fetched from the SolarEdge Monitoring API V2 via OAuth2, permanently below 2,000 calls per month.
+
+- [ ] **Phase 11: OAuth Login & Token Store** - One-time Mac login puts tokens on the Pi; the Pi refreshes them safely and shows "Login nötig" when it can't
+- [ ] **Phase 12: V2 Data Client & Screens** - All screens are filled from V2 endpoints; V1 code and blanket retry are gone
+- [ ] **Phase 13: Fetch Plan & Quota Guard** - Calls follow a daytime schedule with cached screen rotation and a persistent counter that hard-stops at 1,800
+- [ ] **Phase 14: Docs & Deployment** - systemd waits for time sync, README/.env.example cover V2, and se-monitor shows real values
+
+## Phase Details
+
+### Phase 11: OAuth Login & Token Store
+**Goal**: The owner logs in once from the Mac, and from then on the Pi holds a valid token chain on its own, or clearly says it needs a new login
+**Depends on**: Phase 10 (existing app)
+**Requirements**: AUTH-01, AUTH-02, AUTH-03, AUTH-04
+**Success Criteria** (what must be TRUE):
+  1. Running the login script on the Mac opens the SolarEdge consent page in the browser, catches the redirect on http://localhost:8765/callback (with or without `state`), and exchanges the code for a token pair using client ID/secret read from 1Password via `op`
+  2. After the script finishes, the token file exists on se-monitor with mode 0600, and the Mac keeps no refreshing copy
+  3. When the access token is near expiry, the Pi refreshes it and the rotated refresh token is on disk (tmp file + fsync + rename, under a file lock) before the new access token is used; killing the process mid-refresh never leaves an unreadable token file
+  4. With a missing, corrupt or rejected token (token endpoint 400/401), the display shows "Login nötig", the service stays up, and it resumes fetching on its own once a fresh token file is placed on the Pi
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 12: V2 Data Client & Screens
+**Goal**: Every existing screen shows correct values sourced from the Monitoring API V2, and no V1 code remains
+**Depends on**: Phase 11
+**Requirements**: API-01, API-02, API-03, API-04, API-05
+**Success Criteria** (what must be TRUE):
+  1. Produktion, Verbrauch, Einspeisung and Bezug show today's values from `GET /v2/sites/{id}/overview`, correctly converted from the returned `unit` and with null fields shown as 0
+  2. Hausakku shows state of charge and power from `/storage/telemetry` (last non-null value), with Laden/Entladen/Ruhe derived from charge vs discharge power
+  3. Battery presence is detected via `/devices?types=BATTERY` once and read from a disk cache on later starts (no inventory call on restart)
+  4. Verlauf Produktion and Verlauf Verbrauch show 14 daily bars from `/meters/telemetry?resolution=DAY`, bucketed by local date
+  5. The codebase contains no V1 endpoints, no power-flow model/fetch, and no blanket urllib3 retry on 429/5xx (at most one retry on 5xx/timeout)
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 13: Fetch Plan & Quota Guard
+**Goal**: The monitor stays permanently within the 2,000-credit monthly budget while still looking up to date during the day
+**Depends on**: Phase 12
+**Requirements**: QUOTA-01, QUOTA-02, QUOTA-03
+**Success Criteria** (what must be TRUE):
+  1. Between 07:00 and 20:00 the overview is fetched every 30 min, storage telemetry hourly and history once a day; outside that window no data calls are made, and the display keeps rotating on cached values in between
+  2. Every API call (including token refreshes and retries) increments a persistent counter that survives a service restart and resets on the configured billing day (default 5th)
+  3. At 1,800 counted calls all API calls stop and the last values stay on screen until the counter resets
+  4. The log shows the number of calls per day, so a day's total can be checked against the SolarEdge console
+**Plans**: TBD
+
+### Phase 14: Docs & Deployment
+**Goal**: The V2 version runs on se-monitor from boot, and the setup and re-login procedure is documented
+**Depends on**: Phase 13
+**Requirements**: OPS-01, OPS-02, OPS-03
+**Success Criteria** (what must be TRUE):
+  1. The systemd unit starts only after `time-sync.target` (confirmed with `systemctl show` on se-monitor after a reboot)
+  2. README and .env.example describe the V2 setup, how to run the login script, and the re-login procedure after more than 14 days offline
+  3. The new version is deployed on se-monitor and the physical display shows real values that match monitoring.solaredge.com for the same day
+**Plans**: TBD
+
 ## Progress
+
+**Execution Order:** 11 → 12 → 13 → 14
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -49,8 +109,12 @@ Plans:
 | 8. Forecast Screen | v1.1 | 1/1 | Complete | 2026-02-07 |
 | 9. Documentation | v1.1 | 1/1 | Complete | 2026-02-11 |
 | 10. Forecast Fix | v1.2 | 2/2 | Complete | 2026-02-12 |
+| 11. OAuth Login & Token Store | v2.0 | 0/? | Not started | - |
+| 12. V2 Data Client & Screens | v2.0 | 0/? | Not started | - |
+| 13. Fetch Plan & Quota Guard | v2.0 | 0/? | Not started | - |
+| 14. Docs & Deployment | v2.0 | 0/? | Not started | - |
 
 ---
 
 *Roadmap created: 2026-02-07*
-*Last updated: 2026-02-12 (gap closure complete)*
+*Last updated: 2026-11-05 (v2.0 SolarEdge API V2 phases 11-14 added)*
