@@ -260,5 +260,143 @@ class LogHygieneTests(unittest.TestCase):
         self.assertIn("{site_id}", joined)
 
 
+NOW_FIXED = datetime(2026, 11, 5, 14, 0, 0, tzinfo=SITE_TZ)
+
+
+def ts(i, v):
+    return {"timestamp": f"2026-11-05T13:{i:02d}:00+01:00", "value": v}
+
+
+def telemetry_body(soc, charge, discharge, remaining, serial=FAKE_SERIAL):
+    return {
+        "period": {},
+        "resolution": "QUARTER_HOUR",
+        "storage": {
+            serial: {
+                "chargePower": {"unit": "W", "values": [ts(0, 1.0), ts(15, charge), ts(30, None)]},
+                "dischargePower": {"unit": "W", "values": [ts(0, 1.0), ts(15, discharge), ts(30, None)]},
+                "stateOfEnergy": {"unit": "PERCENTAGE", "values": [ts(0, 64.0), ts(15, soc), ts(30, None)]},
+                "remainingEnergy": {"unit": "WH", "values": [ts(0, 1.0), ts(15, remaining), ts(30, None)]},
+                "acGridChargingEnergy": {"unit": "WH", "values": []},
+            }
+        },
+    }
+
+
+class BatteryTelemetryTests(unittest.TestCase):
+    def test_charging(self):
+        api, store, _ = make_api([fake_response(200, telemetry_body(65.0, 1500.0, 0.0, 6200.0))], now=NOW_FIXED)
+        b = api.get_battery_telemetry(internal_temp=21.0)
+        self.assertIsInstance(b, BatteryData)
+        self.assertEqual(b.state_of_charge, 65)
+        self.assertIsInstance(b.state_of_charge, int)
+        self.assertEqual(b.status, "Charge")
+        self.assertAlmostEqual(b.power, 1.5)
+        self.assertAlmostEqual(b.available_energy, 6.2)
+        self.assertEqual(b.internal_temp, 21.0)
+
+    def test_discharging(self):
+        api, _, _ = make_api([fake_response(200, telemetry_body(50.0, 0.0, 800.0, 3000.0))], now=NOW_FIXED)
+        b = api.get_battery_telemetry()
+        self.assertEqual(b.status, "Discharge")
+        self.assertAlmostEqual(b.power, -0.8)
+
+    def test_idle_thresholds(self):
+        for charge, discharge, expected in [(30, 0, "Idle"), (0, 49, "Idle"), (50, 0, "Idle"), (51, 0, "Charge")]:
+            with self.subTest(charge=charge, discharge=discharge):
+                api, _, _ = make_api([fake_response(200, telemetry_body(50.0, charge, discharge, 1000.0))], now=NOW_FIXED)
+                self.assertEqual(api.get_battery_telemetry().status, expected)
+
+    def test_soc_rounding(self):
+        api, _, _ = make_api([fake_response(200, telemetry_body(64.6, 0.0, 0.0, 1000.0))], now=NOW_FIXED)
+        self.assertEqual(api.get_battery_telemetry().state_of_charge, 65)
+
+    def test_null_and_missing_metrics_are_zero(self):
+        body = {"storage": {FAKE_SERIAL: {
+            "stateOfEnergy": {"unit": "PERCENTAGE", "values": [ts(0, None)]},
+            "chargePower": {"unit": "W", "values": []},
+        }}}
+        api, _, _ = make_api([fake_response(200, body)], now=NOW_FIXED)
+        b = api.get_battery_telemetry()
+        self.assertEqual(b.state_of_charge, 0)
+        self.assertEqual(b.power, 0.0)
+        self.assertEqual(b.available_energy, 0.0)
+        self.assertEqual(b.status, "Idle")
+
+    def test_empty_storage_is_none(self):
+        api, _, _ = make_api([fake_response(200, {"storage": {}})], now=NOW_FIXED)
+        self.assertIsNone(api.get_battery_telemetry())
+
+    def test_two_batteries_aggregate(self):
+        a = telemetry_body(60.0, 1000.0, 0.0, 2000.0, serial="SN-A")
+        b = telemetry_body(70.0, 500.0, 0.0, 3000.0, serial="SN-B")
+        a["storage"].update(b["storage"])
+        api, _, _ = make_api([fake_response(200, a)], now=NOW_FIXED)
+        r = api.get_battery_telemetry()
+        self.assertAlmostEqual(r.power, 1.5)
+        self.assertAlmostEqual(r.available_energy, 5.0)
+        self.assertEqual(r.state_of_charge, 65)
+
+    def test_request_window_has_offset(self):
+        api, store, _ = make_api([fake_response(200, telemetry_body(65.0, 0.0, 0.0, 1.0))], now=NOW_FIXED)
+        api.get_battery_telemetry()
+        args, kwargs = store.authorized_request.call_args
+        self.assertTrue(args[1].endswith("/sites/%s/storage/telemetry" % FAKE_SITE_ID))
+        params = kwargs["params"]
+        self.assertEqual(params["resolution"], "QUARTER_HOUR")
+        start = datetime.fromisoformat(params["from"])
+        end = datetime.fromisoformat(params["to"])
+        self.assertIsNotNone(start.tzinfo)
+        self.assertIsNotNone(end.tzinfo)
+        self.assertEqual((end - start).total_seconds(), 3600)
+
+    def test_503_single_attempt(self):
+        api, store, sleep = make_api([fake_response(503), fake_response(200, {})], now=NOW_FIXED)
+        self.assertIsNone(api.get_battery_telemetry())
+        self.assertEqual(store.authorized_request.call_count, 1)
+        sleep.assert_not_called()
+
+
+def status_body(values):
+    return {"storage": {FAKE_SERIAL: {
+        "batteryState": {"unit": "CODE", "values": [ts(0, 3)]},
+        "internalTemperature": {"unit": "CELSIUS", "values": values},
+    }}}
+
+
+class StorageTemperatureTests(unittest.TestCase):
+    def test_last_non_null(self):
+        api, _, _ = make_api([fake_response(200, status_body([ts(0, 20.5), ts(15, None)]))], now=NOW_FIXED)
+        self.assertEqual(api.get_storage_temperature(), 20.5)
+
+    def test_all_null_is_zero(self):
+        api, _, _ = make_api([fake_response(200, status_body([ts(0, None)]))], now=NOW_FIXED)
+        self.assertEqual(api.get_storage_temperature(), 0.0)
+
+    def test_failed_and_empty(self):
+        api, _, _ = make_api([fake_response(500)], now=NOW_FIXED)
+        self.assertIsNone(api.get_storage_temperature())
+        api, _, _ = make_api([fake_response(200, {"storage": {}})], now=NOW_FIXED)
+        self.assertIsNone(api.get_storage_temperature())
+
+    def test_window_two_hours_with_offset(self):
+        api, store, _ = make_api([fake_response(200, status_body([ts(0, 1.0)]))], now=NOW_FIXED)
+        api.get_storage_temperature()
+        args, kwargs = store.authorized_request.call_args
+        self.assertTrue(args[1].endswith("/storage/status"))
+        params = kwargs["params"]
+        self.assertEqual(params["resolution"], "QUARTER_HOUR")
+        start = datetime.fromisoformat(params["from"])
+        end = datetime.fromisoformat(params["to"])
+        self.assertIsNotNone(start.tzinfo)
+        self.assertEqual((end - start).total_seconds(), 7200)
+
+    def test_503_single_attempt(self):
+        api, store, sleep = make_api([fake_response(503), fake_response(200, {})], now=NOW_FIXED)
+        self.assertIsNone(api.get_storage_temperature())
+        self.assertEqual(store.authorized_request.call_count, 1)
+        sleep.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
