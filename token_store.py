@@ -323,7 +323,7 @@ class TokenStore:
             return
         from dotenv import dotenv_values
 
-        values = dotenv_values(self.env_file)
+        values = dotenv_values(self.env_file, interpolate=False)
         cid = values.get("SOLAREDGE_CLIENT_ID")
         secret = values.get("SOLAREDGE_CLIENT_SECRET")
         if cid:

@@ -165,7 +165,8 @@ def format_env_value(value: str) -> str:
     if "\n" in value or "\r" in value:
         raise LoginError("Value contains a newline and cannot be stored in .env")
     if "$" in value:
-        # single quotes disable ${...} interpolation in python-dotenv
+        # single-quote values with "$"; readers also load .env with interpolate=False
+        # (python-dotenv expands ${...} even inside single quotes otherwise)
         escaped = value.replace("\\", "\\\\").replace("'", "\\'")
         return "'" + escaped + "'"
     if any(ch in value for ch in " #\"'\\\t"):
