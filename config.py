@@ -13,6 +13,7 @@ Usage:
 """
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 import os
 import logging
@@ -25,10 +26,16 @@ class Config:
     All environment variables use SOLAREDGE_ prefix.
 
     Required fields (must be provided):
-        - api_key: SolarEdge API key
-        - site_id: SolarEdge site identifier
+        - api_key: SolarEdge API key (D-15; removed in Phase 12)
 
     Optional fields (with defaults):
+        - site_id: informational only; the app reads the site id from the
+          token file (D-14)
+        - client_id / client_secret: OAuth credentials written to .env by the
+          Mac login script (D-13). Missing values do not stop startup; the
+          service shows "Login nötig" instead.
+        - token_file: OAuth token file (default: <app dir>/.tokens.json,
+          override with SOLAREDGE_TOKEN_FILE) (D-11)
         - poll_interval: Minutes between API polls (default: 5, minimum: 1)
         - sleep_start_hour: Hour to pause polling, 0-23 (default: 0 = midnight)
         - sleep_end_hour: Hour to resume polling, 0-23 (default: 6 = 6 AM)
@@ -38,7 +45,13 @@ class Config:
 
     # Required credentials
     api_key: str = ""
-    site_id: str = ""
+    site_id: str = ""  # optional, informational (D-14)
+
+    # OAuth (Phase 11)
+    client_id: str = ""
+    client_secret: str = ""
+    token_file: str = ""
+    env_file: str = ""
 
     # Optional operational settings with defaults
     poll_interval: int = 5
@@ -71,9 +84,19 @@ class Config:
         if not self.api_key:
             errors.append("  - SOLAREDGE_API_KEY: SolarEdge API key (required)")
 
-        self.site_id = os.environ.get("SOLAREDGE_SITE_ID", "")
-        if not self.site_id:
-            errors.append("  - SOLAREDGE_SITE_ID: Site identifier (required)")
+        # Site id is optional: read from the token file at runtime (D-14)
+        self.site_id = os.environ.get("SOLAREDGE_SITE_ID", "").strip()
+
+        # OAuth client credentials: no validation error when empty (D-13)
+        self.client_id = os.environ.get("SOLAREDGE_CLIENT_ID", "").strip()
+        self.client_secret = os.environ.get("SOLAREDGE_CLIENT_SECRET", "").strip()
+
+        app_dir = Path(__file__).resolve().parent
+        self.token_file = (
+            os.environ.get("SOLAREDGE_TOKEN_FILE", "").strip()
+            or str(app_dir / ".tokens.json")
+        )
+        self.env_file = str(app_dir / ".env")
 
         # Load and validate poll interval
         poll_str = os.environ.get("SOLAREDGE_POLL_INTERVAL", "5")
@@ -137,8 +160,19 @@ class Config:
 
         logging.info("Configuration loaded:")
         logging.info(f"  SOLAREDGE_API_KEY: {masked_key}")
-        masked_site = f"****{self.site_id[-4:]}" if len(self.site_id) >= 4 else "****"
+        if self.site_id:
+            masked_site = f"****{self.site_id[-4:]}" if len(self.site_id) >= 4 else "****"
+        else:
+            masked_site = "(from token file)"
         logging.info(f"  SOLAREDGE_SITE_ID: {masked_site}")
+        if self.client_id:
+            masked_cid = f"****{self.client_id[-4:]}" if len(self.client_id) >= 4 else "****"
+        else:
+            masked_cid = "missing"
+        logging.info(f"  SOLAREDGE_CLIENT_ID: {masked_cid}")
+        # Never log any part of the secret (D-16)
+        logging.info(f"  SOLAREDGE_CLIENT_SECRET: {'set' if self.client_secret else 'missing'}")
+        logging.info(f"  SOLAREDGE_TOKEN_FILE: {self.token_file}")
         logging.info(f"  SOLAREDGE_POLL_INTERVAL: {self.poll_interval} min")
         logging.info(f"  SOLAREDGE_SLEEP_START: {self.sleep_start_hour}:00")
         logging.info(f"  SOLAREDGE_SLEEP_END: {self.sleep_end_hour}:00")
