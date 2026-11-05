@@ -70,9 +70,9 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 11-01-PLAN.md — Token store: atomic locked persist, refresh with rotation, LoginRequired signal, watcher, grant warning (wave 1)
-- [ ] 11-02-PLAN.md — Mac login script scripts/solaredge_login.py (op, browser callback, exchange, scp to Pi, .env secrets) (wave 1)
-- [ ] 11-03-PLAN.md — "Login nötig" screen, config OAuth fields, gitignore/.env.example (wave 1)
+- [x] 11-01-PLAN.md — Token store: atomic locked persist, refresh with rotation, LoginRequired signal, watcher, grant warning (wave 1)
+- [x] 11-02-PLAN.md — Mac login script scripts/solaredge_login.py (op, browser callback, exchange, scp to Pi, .env secrets) (wave 1)
+- [x] 11-03-PLAN.md — "Login nötig" screen, config OAuth fields, gitignore/.env.example (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -138,7 +138,7 @@ Plans:
 | 8. Forecast Screen | v1.1 | 1/1 | Complete | 2026-02-07 |
 | 9. Documentation | v1.1 | 1/1 | Complete | 2026-02-11 |
 | 10. Forecast Fix | v1.2 | 2/2 | Complete | 2026-02-12 |
-| 11. OAuth Login & Token Store | v2.0 | 0/5 | Planned | - |
+| 11. OAuth Login & Token Store | v2.0 | 3/5 | In Progress|  |
 | 12. V2 Data Client & Screens | v2.0 | 0/? | Not started | - |
 | 13. Fetch Plan & Quota Guard | v2.0 | 0/? | Not started | - |
 | 14. Docs & Deployment | v2.0 | 0/? | Not started | - |
