@@ -44,7 +44,11 @@ from config import Config
 from logging_setup import setup_logging
 from solaredge_api import SolarEdgeAPI, SITE_TZ
 from fetch_schedule import FetchPlan
-from battery_cache import load_battery_cache, save_battery_cache
+from battery_cache import (
+    is_false_expired,
+    load_battery_cache_entry,
+    save_battery_cache,
+)
 from fetcher import DataCache, fetch_round, build_cycle
 from forecast_api import ForecastSolarAPI
 from display import Display
@@ -119,9 +123,12 @@ def init_site_clients(config: Config, token_store: TokenStore, site_id: str, has
     Makes no API call: detection runs in fetch_round (DEVICES job) when unknown.
     """
     api = SolarEdgeAPI(token_store)
-    cached = load_battery_cache(config.battery_cache_file, site_id)
-    battery_known = cached is not None
-    has_battery = bool(cached)
+    entry = load_battery_cache_entry(config.battery_cache_file, site_id)
+    has_battery, checked_at = entry if entry is not None else (False, None)
+    if entry is not None and not has_battery and is_false_expired(checked_at):
+        logging.info("Cached 'no battery' expired, will detect")
+        entry = None
+    battery_known = entry is not None
     if battery_known:
         logging.info(f"Battery presence from cache: {has_battery}")
     else:
@@ -129,7 +136,7 @@ def init_site_clients(config: Config, token_store: TokenStore, site_id: str, has
     screens = get_screens(has_battery=has_battery, has_forecast_config=has_forecast)
     screen_names = [name for _, _, name in screens]
     logging.info(f"Screen rotation: {', '.join(screen_names)}")
-    return api, has_battery, battery_known, screens
+    return api, has_battery, battery_known, screens, checked_at
 
 
 MAX_FAILURES = 3
@@ -153,6 +160,7 @@ class LoopState:
     poll_interval_seconds: float = 1800.0
     consecutive_failures: int = 0
     error_screen_shown: bool = False
+    battery_checked_at: Any = None  # epoch of the last detection (None = unknown)
 
 
 def run_iteration(state: LoopState, display, now_mono: float) -> bool:
@@ -162,6 +170,14 @@ def run_iteration(state: LoopState, display, now_mono: float) -> bool:
     """
     if now_mono >= state.next_poll:
         now_local = datetime.now(SITE_TZ)
+        if (
+            state.battery_known
+            and not state.has_battery
+            and is_false_expired(state.battery_checked_at)
+        ):
+            # A cached "no battery" is only trusted for 7 days (one /devices call).
+            logging.info("Cached 'no battery' expired, will re-detect")
+            state.battery_known = False
         if state.plan.due(now_local, state.has_battery, state.battery_known):
             logging.info("Starting poll cycle")
             # Refresh token if close to expiry (keeps the 14-day chain alive)
@@ -182,6 +198,7 @@ def run_iteration(state: LoopState, display, now_mono: float) -> bool:
                 changed = detected != state.has_battery
                 state.has_battery = detected
                 state.battery_known = True
+                state.battery_checked_at = time.time()
                 if changed:
                     state.screens = get_screens(
                         has_battery=detected, has_forecast_config=state.has_forecast
@@ -379,7 +396,7 @@ def main():
                 enter_login_state(e.reason)
                 continue
             if initialized_site_id != token_site_id:
-                api, has_battery, battery_known, screens = init_site_clients(
+                api, has_battery, battery_known, screens, checked_at = init_site_clients(
                     config, token_store, token_site_id, has_forecast
                 )
                 new_state = LoopState(
@@ -391,6 +408,7 @@ def main():
                     screens=screens,
                     has_battery=has_battery,
                     battery_known=battery_known,
+                    battery_checked_at=checked_at,
                     site_id=token_site_id,
                     forecast_api=forecast_api,
                     has_forecast=has_forecast,

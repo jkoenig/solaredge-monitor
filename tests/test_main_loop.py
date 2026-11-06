@@ -118,6 +118,24 @@ class RunIterationTest(unittest.TestCase):
         self.run_it(state)
         self.assertEqual(self.display.render.call_count, 2)
 
+    def test_expired_false_battery_is_redetected(self):
+        state = make_state(next_poll_offset=-1.0)
+        state.battery_known = True
+        state.has_battery = False
+        state.battery_checked_at = None  # legacy cache without timestamp
+        self.m["fetch"].return_value = RoundResult(overview_ok=True)
+        self.run_it(state)
+        self.assertFalse(self.m["fetch"].call_args[0][5])  # battery_known passed False
+
+    def test_fresh_false_battery_not_redetected(self):
+        state = make_state(next_poll_offset=-1.0)
+        state.battery_known = True
+        state.has_battery = False
+        state.battery_checked_at = time.time()
+        self.m["fetch"].return_value = RoundResult(overview_ok=True)
+        self.run_it(state)
+        self.assertTrue(self.m["fetch"].call_args[0][5])
+
     def test_battery_detected_saves_and_rebuilds(self):
         state = make_state(next_poll_offset=-1.0)
         self.m["fetch"].return_value = RoundResult(overview_ok=True, battery_detected=True)
