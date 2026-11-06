@@ -332,9 +332,19 @@ class BatteryTelemetryTests(unittest.TestCase):
         api, _, _ = make_api([fake_response(200, body)], now=NOW_FIXED)
         self.assertEqual(api.get_battery_telemetry().state_of_charge, 11)
 
-    def test_null_and_missing_metrics_are_zero(self):
+    def test_missing_soc_returns_none(self):
+        for soc_metric in ({"unit": "PERCENTAGE", "values": [ts(0, None)]}, None):
+            body = {"storage": {FAKE_SERIAL: {
+                "chargePower": {"unit": "W", "values": [ts(0, 100.0)]},
+            }}}
+            if soc_metric is not None:
+                body["storage"][FAKE_SERIAL]["stateOfEnergy"] = soc_metric
+            api, _, _ = make_api([fake_response(200, body)], now=NOW_FIXED)
+            self.assertIsNone(api.get_battery_telemetry())
+
+    def test_null_and_missing_power_metrics_are_zero(self):
         body = {"storage": {FAKE_SERIAL: {
-            "stateOfEnergy": {"unit": "PERCENTAGE", "values": [ts(0, None)]},
+            "stateOfEnergy": {"unit": "PERCENTAGE", "values": [ts(0, 0.0)]},
             "chargePower": {"unit": "W", "values": []},
         }}}
         api, _, _ = make_api([fake_response(200, body)], now=NOW_FIXED)

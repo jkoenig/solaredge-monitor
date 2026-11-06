@@ -194,7 +194,8 @@ class SolarEdgeAPI:
         """SoC, net power, status and stored energy from /storage/telemetry.
 
         Uses the last non-null value of each metric in a 1 h window. Missing or
-        all-null metrics count as 0. Temperature is passed in (it comes from
+        all-null power/energy metrics count as 0. A missing stateOfEnergy
+        returns None (keeps the last good cached reading). Temperature is passed in (it comes from
         /storage/status on a slower cadence).
         """
         body = self._request(
@@ -212,7 +213,9 @@ class SolarEdgeAPI:
             net_w = 0.0
             remaining_kwh = 0.0
             for metrics in storage.values():
-                socs.append(self._metric_last(metrics, "stateOfEnergy"))
+                soc = last_non_null((metrics.get("stateOfEnergy") or {}).get("values"))
+                if soc is not None:
+                    socs.append(soc)
                 net_w += self._metric_last(metrics, "chargePower")
                 net_w -= self._metric_last(metrics, "dischargePower")
                 remaining = metrics.get("remainingEnergy") or {}
@@ -220,6 +223,9 @@ class SolarEdgeAPI:
                     last_non_null(remaining.get("values")) or 0.0,
                     remaining.get("unit", "WH"),
                 )
+            if not socs:
+                logging.warning("Storage telemetry has no stateOfEnergy value")
+                return None
             # stateOfEnergy (unit PERCENTAGE) arrives as a 0..1 fraction on the
             # live API (probed 2026-11-06: 0.111 with 983 Wh of 9.2 kWh), so scale
             # to %. A value above 1.0 can only be a percent already: use as-is.
