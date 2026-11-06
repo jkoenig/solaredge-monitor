@@ -36,7 +36,14 @@ class RoundResult:
 def patch_history_today(
     history: EnergyHistory, today: date, production_kwh: float, consumption_kwh: float
 ) -> EnergyHistory:
-    """Return history re-aligned to end at `today` with today's values set (D-06)."""
+    """Return history re-aligned to end at `today` with today's values set (D-06).
+
+    Accepted limitation: today's bar comes from the site overview, while older
+    bars come from /energy (production) and the summed meter telemetry
+    (consumption). The sources may differ slightly, so the last bar can shift a
+    little when the next history refresh replaces it. A consistent source would
+    need extra API calls (credit budget), so the small mismatch is accepted.
+    """
     n = len(history.dates)
     if n == 0:
         return history
