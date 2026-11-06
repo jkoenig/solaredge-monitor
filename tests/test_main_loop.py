@@ -101,6 +101,23 @@ class RunIterationTest(unittest.TestCase):
         self.assertEqual(self.m["cycle"].call_count, 2)
         self.display.render.assert_called_once()
 
+    def test_error_screen_redrawn_after_wake(self):
+        state = make_state(next_poll_offset=-1.0)
+        self.m["fetch"].return_value = RoundResult(overview_ok=False)
+        for _ in range(3):
+            self.run_it(state)
+            state.next_poll = time.monotonic() - 1
+        self.display.render.assert_called_once_with("img", "error")
+        # sleep/wake: display cleared, main resets the flag; next failed poll redraws
+        state.error_screen_shown = False
+        self.run_it(state)
+        self.assertEqual(state.consecutive_failures, 4)
+        self.assertEqual(self.display.render.call_count, 2)
+        # but not on every further failure
+        state.next_poll = time.monotonic() - 1
+        self.run_it(state)
+        self.assertEqual(self.display.render.call_count, 2)
+
     def test_battery_detected_saves_and_rebuilds(self):
         state = make_state(next_poll_offset=-1.0)
         self.m["fetch"].return_value = RoundResult(overview_ok=True, battery_detected=True)
