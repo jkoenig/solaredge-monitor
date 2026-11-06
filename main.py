@@ -152,6 +152,7 @@ class LoopState:
     next_poll: float = 0.0
     poll_interval_seconds: float = 1800.0
     consecutive_failures: int = 0
+    error_screen_shown: bool = False
 
 
 def run_iteration(state: LoopState, display, now_mono: float) -> bool:
@@ -189,6 +190,7 @@ def run_iteration(state: LoopState, display, now_mono: float) -> bool:
 
             if result.overview_ok:
                 state.consecutive_failures = 0
+                state.error_screen_shown = False
                 e = state.cache.energy
                 logging.info(
                     f"Poll successful - Production: {e.production:.2f} kWh, "
@@ -201,12 +203,13 @@ def run_iteration(state: LoopState, display, now_mono: float) -> bool:
                 logging.warning(
                     f"Poll failed (consecutive failures: {state.consecutive_failures}/{MAX_FAILURES})"
                 )
-                if state.consecutive_failures == MAX_FAILURES:
+                if state.consecutive_failures >= MAX_FAILURES and not state.error_screen_shown:
                     logging.error(
-                        f"API unreachable after {MAX_FAILURES} consecutive failures, "
+                        f"API unreachable after {state.consecutive_failures} consecutive failures, "
                         f"displaying error screen"
                     )
                     display.render(render_error_screen(), "error")
+                    state.error_screen_shown = True
 
         # Schedule next poll
         state.next_poll += state.poll_interval_seconds
@@ -336,6 +339,7 @@ def main():
                     next_poll = time.monotonic()  # Force immediate poll after wake
                     if state is not None:
                         state.next_poll = next_poll
+                        state.error_screen_shown = False  # redraw after display.clear()
 
             # Login-needed state: only the login screen, no calls (D-07..D-09)
             if login_needed:
@@ -354,6 +358,7 @@ def main():
                             login_screen_shown = False
                             if state is not None:
                                 state.consecutive_failures = 0
+                                state.error_screen_shown = False
                                 state.next_poll = time.monotonic()
                             next_poll = time.monotonic()
                         except LoginRequired as e:
