@@ -10,6 +10,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import battery_cache  # noqa: E402
 from battery_cache import load_battery_cache, save_battery_cache  # noqa: E402
 
 SITE = "12345678"
@@ -26,6 +27,34 @@ class BatteryCacheTests(unittest.TestCase):
         for value in (True, False):
             self.assertTrue(save_battery_cache(self.path, SITE, value))
             self.assertIs(load_battery_cache(self.path, SITE), value)
+
+    def _write_raw(self, has_battery, checked_at=None):
+        data = {
+            "version": 1,
+            "has_battery": has_battery,
+            "site_hash": battery_cache._site_hash(SITE),
+        }
+        if checked_at is not None:
+            data["checked_at"] = checked_at
+        self.path.write_text(json.dumps(data))
+
+    def test_false_expires_after_ttl(self):
+        self._write_raw(False, 1000)
+        ttl = battery_cache.FALSE_TTL_SECONDS
+        self.assertIs(load_battery_cache(self.path, SITE, now=1000 + ttl - 1), False)
+        self.assertIsNone(load_battery_cache(self.path, SITE, now=1000 + ttl))
+
+    def test_false_without_timestamp_is_expired(self):
+        self._write_raw(False)
+        self.assertIsNone(load_battery_cache(self.path, SITE))
+
+    def test_true_never_expires_and_legacy_format_loads(self):
+        self._write_raw(True)
+        self.assertIs(load_battery_cache(self.path, SITE, now=10**12), True)
+
+    def test_fresh_false_roundtrip(self):
+        save_battery_cache(self.path, SITE, False)
+        self.assertIs(load_battery_cache(self.path, SITE), False)
 
     def test_missing_file(self):
         self.assertIsNone(load_battery_cache(self.path, SITE))
@@ -59,7 +88,7 @@ class BatteryCacheTests(unittest.TestCase):
         save_battery_cache(self.path, SITE, True)
         raw = self.path.read_text()
         self.assertEqual(
-            set(json.loads(raw).keys()), {"version", "has_battery", "site_hash"}
+            set(json.loads(raw).keys()), {"version", "has_battery", "site_hash", "checked_at"}
         )
         self.assertNotIn(SITE, raw)
 
