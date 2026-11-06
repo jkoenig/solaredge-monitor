@@ -15,11 +15,11 @@
 
 ### Daten (API)
 
-- [ ] **API-01**: Produktion, Verbrauch, Einspeisung and Bezug screens are filled from `GET /v2/sites/{id}/overview`
-- [ ] **API-02**: Hausakku screen shows state of charge and power from `/storage/telemetry`; charge/discharge/idle status is derived from the power values
-- [ ] **API-03**: Battery presence is detected once via `/devices?types=BATTERY` and cached on disk
-- [ ] **API-04**: Verlauf Produktion/Verbrauch screens get daily values from `/meters/telemetry?resolution=DAY`
-- [ ] **API-05**: V1 code is removed, including power-flow and the blanket automatic retry on 429/5xx
+- [x] **API-01**: Produktion, Verbrauch, Einspeisung and Bezug screens are filled from `GET /v2/sites/{id}/overview`
+- [x] **API-02**: Hausakku screen shows state of charge and power from `/storage/telemetry`; charge/discharge/idle status is derived from the power values
+- [x] **API-03**: Battery presence is detected once via `/devices?types=BATTERY` and cached on disk
+- [x] **API-04**: Verlauf Produktion/Verbrauch screens get daily values from `/meters/telemetry?resolution=DAY`
+- [x] **API-05**: V1 code is removed, including power-flow and the blanket automatic retry on 429/5xx
 
 ### Kontingent (QUOTA)
 
@@ -53,11 +53,11 @@
 | AUTH-02 | Phase 11 | Complete |
 | AUTH-03 | Phase 11 | Complete |
 | AUTH-04 | Phase 11 | Complete |
-| API-01 | Phase 12 | Pending |
-| API-02 | Phase 12 | Pending |
-| API-03 | Phase 12 | Pending |
-| API-04 | Phase 12 | Pending |
-| API-05 | Phase 12 | Pending |
+| API-01 | Phase 12 | Complete |
+| API-02 | Phase 12 | Complete |
+| API-03 | Phase 12 | Complete |
+| API-04 | Phase 12 | Complete |
+| API-05 | Phase 12 | Complete |
 | QUOTA-01 | Phase 13 | Pending |
 | QUOTA-02 | Phase 13 | Pending |
 | QUOTA-03 | Phase 13 | Pending |

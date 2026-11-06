@@ -1,5 +1,5 @@
 ---
-status: partial
+status: complete
 phase: 12-v2-data-client-screens
 source: [12-VERIFICATION.md]
 started: 2026-11-06T08:15:00+01:00
@@ -8,7 +8,7 @@ updated: 2026-11-06T16:35:00+01:00
 
 ## Current Test
 
-[awaiting human testing]
+[testing complete]
 
 ## Tests
 
@@ -18,14 +18,14 @@ result: passed — journal of the 08:05–16:30 run, per clock hour 09–15: 3,3
 
 ### 2. Physical panel rotation
 expected: The owner watches the e-ink panel for a few minutes: screens rotate (about 1 min each) between 30-min polls, Hausakku shows ~SoC % (not 0 %), values match the rendered preview approved on 2026-11-06.
-result: [pending]
+result: passed — approved by owner 2026-11-06
 
 ## Summary
 
 total: 2
-passed: 1
+passed: 2
 issues: 0
-pending: 1
+pending: 0
 skipped: 0
 blocked: 0
 
