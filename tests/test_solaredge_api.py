@@ -320,6 +320,18 @@ class BatteryTelemetryTests(unittest.TestCase):
         api, _, _ = make_api([fake_response(200, telemetry_body(100.0, 0.0, 0.0, 9200.0))], now=NOW_FIXED)
         self.assertEqual(api.get_battery_telemetry().state_of_charge, 100)
 
+    def test_soc_already_percent_used_as_is(self):
+        body = telemetry_body(0.0, 0.0, 0.0, 1000.0)
+        body["storage"][FAKE_SERIAL]["stateOfEnergy"]["values"] = [ts(15, 11.1)]
+        api, _, _ = make_api([fake_response(200, body)], now=NOW_FIXED)
+        self.assertEqual(api.get_battery_telemetry().state_of_charge, 11)
+
+    def test_soc_fraction_scaled(self):
+        body = telemetry_body(0.0, 0.0, 0.0, 1000.0)
+        body["storage"][FAKE_SERIAL]["stateOfEnergy"]["values"] = [ts(15, 0.111)]
+        api, _, _ = make_api([fake_response(200, body)], now=NOW_FIXED)
+        self.assertEqual(api.get_battery_telemetry().state_of_charge, 11)
+
     def test_null_and_missing_metrics_are_zero(self):
         body = {"storage": {FAKE_SERIAL: {
             "stateOfEnergy": {"unit": "PERCENTAGE", "values": [ts(0, None)]},

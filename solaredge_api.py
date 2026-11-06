@@ -221,8 +221,11 @@ class SolarEdgeAPI:
                     remaining.get("unit", "WH"),
                 )
             # stateOfEnergy (unit PERCENTAGE) arrives as a 0..1 fraction on the
-            # live API (probed 2026-11-06: 0.111 with 983 Wh of 9.2 kWh), so scale to %.
-            soc_pct = sum(socs) / len(socs) * 100.0
+            # live API (probed 2026-11-06: 0.111 with 983 Wh of 9.2 kWh), so scale
+            # to %. A value above 1.0 can only be a percent already: use as-is.
+            # (Ambiguity: a raw 1.0 is read as 100 %, not 1 %.)
+            pcts = [v * 100.0 if v <= 1.0 else v for v in socs]
+            soc_pct = sum(pcts) / len(pcts)
             return BatteryData(
                 state_of_charge=int(round(min(100.0, max(0.0, soc_pct)))),
                 status=derive_battery_status(net_w),
