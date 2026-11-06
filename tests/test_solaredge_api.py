@@ -275,7 +275,8 @@ def telemetry_body(soc, charge, discharge, remaining, serial=FAKE_SERIAL):
             serial: {
                 "chargePower": {"unit": "W", "values": [ts(0, 1.0), ts(15, charge), ts(30, None)]},
                 "dischargePower": {"unit": "W", "values": [ts(0, 1.0), ts(15, discharge), ts(30, None)]},
-                "stateOfEnergy": {"unit": "PERCENTAGE", "values": [ts(0, 64.0), ts(15, soc), ts(30, None)]},
+                # Live API sends PERCENTAGE as a 0..1 fraction; callers pass percent.
+                "stateOfEnergy": {"unit": "PERCENTAGE", "values": [ts(0, 0.64), ts(15, soc / 100.0), ts(30, None)]},
                 "remainingEnergy": {"unit": "WH", "values": [ts(0, 1.0), ts(15, remaining), ts(30, None)]},
                 "acGridChargingEnergy": {"unit": "WH", "values": []},
             }
@@ -310,6 +311,14 @@ class BatteryTelemetryTests(unittest.TestCase):
     def test_soc_rounding(self):
         api, _, _ = make_api([fake_response(200, telemetry_body(64.6, 0.0, 0.0, 1000.0))], now=NOW_FIXED)
         self.assertEqual(api.get_battery_telemetry().state_of_charge, 65)
+
+    def test_soc_fraction_scaled_to_percent(self):
+        api, _, _ = make_api([fake_response(200, telemetry_body(11.11111, 0.0, 0.0, 983.0))], now=NOW_FIXED)
+        self.assertEqual(api.get_battery_telemetry().state_of_charge, 11)
+
+    def test_soc_full_is_100(self):
+        api, _, _ = make_api([fake_response(200, telemetry_body(100.0, 0.0, 0.0, 9200.0))], now=NOW_FIXED)
+        self.assertEqual(api.get_battery_telemetry().state_of_charge, 100)
 
     def test_null_and_missing_metrics_are_zero(self):
         body = {"storage": {FAKE_SERIAL: {

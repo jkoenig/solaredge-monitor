@@ -220,8 +220,11 @@ class SolarEdgeAPI:
                     last_non_null(remaining.get("values")) or 0.0,
                     remaining.get("unit", "WH"),
                 )
+            # stateOfEnergy (unit PERCENTAGE) arrives as a 0..1 fraction on the
+            # live API (probed 2026-11-06: 0.111 with 983 Wh of 9.2 kWh), so scale to %.
+            soc_pct = sum(socs) / len(socs) * 100.0
             return BatteryData(
-                state_of_charge=int(round(sum(socs) / len(socs))),
+                state_of_charge=int(round(min(100.0, max(0.0, soc_pct)))),
                 status=derive_battery_status(net_w),
                 internal_temp=internal_temp,
                 available_energy=remaining_kwh,
