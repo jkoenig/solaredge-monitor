@@ -47,7 +47,7 @@ Plans:
 **Milestone goal:** The monitor shows real data again, fetched from the SolarEdge Monitoring API V2 via OAuth2, permanently below 2,000 calls per month.
 
 - [x] **Phase 11: OAuth Login & Token Store** - One-time Mac login puts tokens on the Pi; the Pi refreshes them safely and shows "Login nötig" when it can't (completed 2026-11-05)
-- [ ] **Phase 12: V2 Data Client & Screens** - All screens are filled from V2 endpoints; V1 code and blanket retry are gone
+- [x] **Phase 12: V2 Data Client & Screens** - All screens are filled from V2 endpoints; V1 code and blanket retry are gone (completed 2026-11-06)
 - [ ] **Phase 13: Fetch Plan & Quota Guard** - Calls follow a daytime schedule with cached screen rotation and a persistent counter that hard-stops at 1,800
 - [ ] **Phase 14: Docs & Deployment** - systemd waits for time sync, README/.env.example cover V2, and se-monitor shows real values
 
@@ -116,7 +116,7 @@ Plans:
 
 **Wave 4**
 
-- [ ] 12-06-PLAN.md — Live deploy on se-monitor with owner go-ahead, read-only journal checks, display check (wave 4, checkpoint)
+- [x] 12-06-PLAN.md — Live deploy on se-monitor with owner go-ahead, read-only journal checks, display check (wave 4, checkpoint)
 **UI hint**: yes
 
 ### Phase 13: Fetch Plan & Quota Guard
@@ -158,7 +158,7 @@ Plans:
 | 9. Documentation | v1.1 | 1/1 | Complete | 2026-02-11 |
 | 10. Forecast Fix | v1.2 | 2/2 | Complete | 2026-02-12 |
 | 11. OAuth Login & Token Store | v2.0 | 5/5 | Complete    | 2026-11-05 |
-| 12. V2 Data Client & Screens | v2.0 | 5/6 | In Progress|  |
+| 12. V2 Data Client & Screens | v2.0 | 6/6 | Complete   | 2026-11-06 |
 | 13. Fetch Plan & Quota Guard | v2.0 | 0/? | Not started | - |
 | 14. Docs & Deployment | v2.0 | 0/? | Not started | - |
 
