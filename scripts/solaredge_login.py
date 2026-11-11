@@ -1,27 +1,32 @@
 #!/usr/bin/env python3
 """One-command SolarEdge OAuth login, run on the Mac.
 
-Flow (D-17):
+Flow:
   1. read the OAuth client id/secret from 1Password (`op`, never printed)
   2. write SOLAREDGE_CLIENT_ID / SOLAREDGE_CLIENT_SECRET into the Pi's .env
   3. open the SolarEdge consent page in the browser, listen on
      127.0.0.1:8765/callback for the redirect
   4. exchange the authorization code immediately for tokens
-  5. upload the token file to raspberrypi.local (scp to a temp name, chmod 600,
+  5. upload the token file to the Pi (scp to a temp name, chmod 600,
      atomic mv) and delete every local copy
 
-The Mac never refreshes tokens (D-01): the Pi owns the refresh chain.
+The Mac never refreshes tokens: the Pi owns the refresh chain.
 A refresh on this machine would invalidate the Pi's refresh token.
+
+Personal settings: copy scripts/solaredge_login.example.ini to
+scripts/solaredge_login.local.ini (git-ignored) and fill in host, remote_dir,
+op_item and op_account. Command-line flags override the file.
 
 Usage:
   python3 scripts/solaredge_login.py                 # full login
   python3 scripts/solaredge_login.py --secrets-only  # only update Pi .env
 
-Stdlib only, compatible with macOS system python3 (3.9) (D-18).
+Stdlib only, compatible with macOS system python3 (3.9).
 """
 from __future__ import annotations
 
 import argparse
+import configparser
 import http.server
 import json
 import os
@@ -50,6 +55,9 @@ OP_ITEM = "SolarEdge API"
 OP_ACCOUNT = ""
 DEFAULT_HOST = "raspberrypi.local"
 DEFAULT_REMOTE_DIR = "/home/pi/solaredge-monitor"
+LOCAL_CONFIG_ENV = "SOLAREDGE_LOGIN_CONFIG"
+LOCAL_CONFIG_NAME = "solaredge_login.local.ini"
+LOCAL_CONFIG_KEYS = ("host", "remote_dir", "op_item", "op_account")
 TOKEN_FILENAME = ".tokens.json"
 CALLBACK_TIMEOUT_SECONDS = 300
 GRANT_MONTHS = 24
@@ -268,12 +276,45 @@ class CallbackServer(http.server.HTTPServer):
 
 
 # ---------------------------------------------------------------------------
+# Local personal settings
+# ---------------------------------------------------------------------------
+
+def local_config_path() -> str:
+    env = os.environ.get(LOCAL_CONFIG_ENV)
+    if env:
+        return env
+    return str(Path(__file__).resolve().parent / LOCAL_CONFIG_NAME)
+
+
+def load_local_config(path: Optional[str] = None) -> Dict[str, str]:
+    """Read the git-ignored local settings file; a missing file means defaults."""
+    path = path or local_config_path()
+    if not os.path.exists(path):
+        return {}
+    parser = configparser.ConfigParser(interpolation=None)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            parser.read_file(fh)
+    except (configparser.Error, OSError, UnicodeDecodeError) as e:
+        raise LoginError("Cannot read local config %s: %s" % (path, type(e).__name__))
+    if not parser.has_section("login"):
+        raise LoginError("Local config %s has no [login] section" % path)
+    unknown = [k for k in parser["login"] if k not in LOCAL_CONFIG_KEYS]
+    if unknown:
+        raise LoginError(
+            "Local config %s: unknown key(s): %s (allowed: %s)"
+            % (path, ", ".join(unknown), ", ".join(LOCAL_CONFIG_KEYS))
+        )
+    return {k: v for k, v in parser["login"].items()}
+
+
+# ---------------------------------------------------------------------------
 # I/O
 # ---------------------------------------------------------------------------
 
 def read_op_credentials(
     item: str, id_label: Optional[str], secret_label: Optional[str],
-    account: Optional[str] = OP_ACCOUNT,
+    account: Optional[str] = "",
 ) -> Tuple[str, str]:
     if shutil.which("op") is None:
         raise LoginError(
@@ -400,14 +441,25 @@ def _mask(site_id: str) -> str:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    ap = argparse.ArgumentParser(description="SolarEdge OAuth login for raspberrypi.local")
+    try:
+        cfg = load_local_config()
+    except LoginError as e:
+        print("Fehler: %s" % e, file=sys.stderr)
+        return 1
+    note = " (default from scripts/solaredge_login.local.ini if present)"
+    ap = argparse.ArgumentParser(
+        description="SolarEdge OAuth login for the Raspberry Pi monitor")
     ap.add_argument("--secrets-only", action="store_true",
                     help="only update client id/secret in the Pi .env, no login")
-    ap.add_argument("--host", default=DEFAULT_HOST)
-    ap.add_argument("--remote-dir", default=DEFAULT_REMOTE_DIR)
-    ap.add_argument("--op-item", default=OP_ITEM)
-    ap.add_argument("--op-account", default=OP_ACCOUNT,
-                    help="1Password account (sign-in address); empty string = op default")
+    ap.add_argument("--host", default=cfg.get("host", DEFAULT_HOST),
+                    help="Pi ssh host" + note)
+    ap.add_argument("--remote-dir", default=cfg.get("remote_dir", DEFAULT_REMOTE_DIR),
+                    help="install directory on the Pi" + note)
+    ap.add_argument("--op-item", default=cfg.get("op_item", OP_ITEM),
+                    help="1Password item (title or id)" + note)
+    ap.add_argument("--op-account", default=cfg.get("op_account", OP_ACCOUNT),
+                    help="1Password account (sign-in address); empty string = op default"
+                         + note)
     ap.add_argument("--op-id-field", default=None)
     ap.add_argument("--op-secret-field", default=None)
     ap.add_argument("--port", type=int, default=CALLBACK_PORT,
