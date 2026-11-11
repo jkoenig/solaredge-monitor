@@ -50,6 +50,26 @@ class ConfigTests(unittest.TestCase):
         c = make_config(SOLAREDGE_TOKEN_FILE="/srv/x/tokens.json")
         self.assertEqual(c.battery_cache_file, str(Path("/srv/x/.battery.json")))
 
+    def test_billing_day_default_and_valid(self):
+        c = make_config()
+        self.assertEqual(c.billing_day, 5)
+        self.assertEqual(make_config(SOLAREDGE_BILLING_DAY="31").billing_day, 31)
+
+    def test_billing_day_invalid(self):
+        for bad in ("0", "32", "abc"):
+            with self.assertRaises(ValueError) as cm:
+                make_config(SOLAREDGE_BILLING_DAY=bad)
+            self.assertIn("SOLAREDGE_BILLING_DAY", str(cm.exception))
+
+    def test_call_counter_file_default_and_custom(self):
+        c = make_config()
+        self.assertEqual(c.call_counter_file,
+                         str(Path(c.token_file).parent / ".calls.json"))
+        c = make_config(SOLAREDGE_CALL_COUNTER_FILE="/tmp/x.json")
+        self.assertEqual(c.call_counter_file, "/tmp/x.json")
+        c = make_config(SOLAREDGE_TOKEN_FILE="/data/t.json")
+        self.assertEqual(c.call_counter_file, str(Path("/data/.calls.json")))
+
     def test_log_startup_has_no_api_key(self):
         c = make_config()
         with self.assertLogs(level="INFO") as cm:

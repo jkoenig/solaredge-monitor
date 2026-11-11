@@ -18,7 +18,7 @@ from typing import Optional
 import os
 import logging
 
-# Every API call costs a credit (interim D-07 budget protection)
+# Every API call costs a credit (budget protection, Phase 13 fetch plan)
 MIN_POLL_INTERVAL = 30
 MAX_AWAKE_HOURS = 13
 
@@ -42,10 +42,14 @@ class Config:
         - battery_cache_file: battery presence cache next to the token file
         - poll_interval: Minutes between API polls (default: 30, minimum: 30,
           lower values are raised because every API call costs a credit)
-        - sleep_start_hour: Hour to pause polling, 0-23 (default: 20)
-        - sleep_end_hour: Hour to resume polling, 0-23 (default: 7)
-        These interim D-07 defaults keep the Pi within the daily call budget
-        without .env overrides; Phase 13 replaces the interim cadence.
+        - sleep_start_hour: Hour the night plan starts, 0-23 (default: 20)
+        - sleep_end_hour: Hour the day plan starts, 0-23 (default: 7)
+        These defaults match the Phase 13 day window (07:00-20:00) of the
+        fetch plan and keep the Pi within the monthly credit budget without
+        .env overrides.
+        - billing_day: Day of month the credit cycle resets, 1-31 (default: 5)
+        - call_counter_file: persistent call counter next to the token file
+          (override with SOLAREDGE_CALL_COUNTER_FILE)
         - debug: Enable debug mode (default: False)
         - log_level: Logging level (default: INFO)
     """
@@ -57,6 +61,8 @@ class Config:
     client_secret: str = ""
     token_file: str = ""
     battery_cache_file: str = ""
+    call_counter_file: str = ""
+    billing_day: int = 5
     env_file: str = ""
 
     # Optional operational settings with defaults
@@ -98,7 +104,20 @@ class Config:
             or str(app_dir / ".tokens.json")
         )
         self.battery_cache_file = str(Path(self.token_file).parent / ".battery.json")
+        self.call_counter_file = (
+            os.environ.get("SOLAREDGE_CALL_COUNTER_FILE", "").strip()
+            or str(Path(self.token_file).parent / ".calls.json")
+        )
         self.env_file = str(app_dir / ".env")
+
+        # Load and validate billing day (credit cycle reset day)
+        billing_str = os.environ.get("SOLAREDGE_BILLING_DAY", "5")
+        try:
+            self.billing_day = int(billing_str)
+            if not (1 <= self.billing_day <= 31):
+                errors.append("  - SOLAREDGE_BILLING_DAY: Must be 1-31")
+        except ValueError:
+            errors.append(f"  - SOLAREDGE_BILLING_DAY: Must be an integer (got '{billing_str}')")
 
         # Load and validate poll interval
         poll_str = os.environ.get("SOLAREDGE_POLL_INTERVAL", "30")
@@ -172,13 +191,15 @@ class Config:
         logging.info(f"  SOLAREDGE_CLIENT_SECRET: {'set' if self.client_secret else 'missing'}")
         logging.info(f"  SOLAREDGE_TOKEN_FILE: {self.token_file}")
         logging.info(f"  SOLAREDGE_BATTERY_CACHE: {self.battery_cache_file}")
+        logging.info(f"  SOLAREDGE_CALL_COUNTER_FILE: {self.call_counter_file}")
+        logging.info(f"  SOLAREDGE_BILLING_DAY: {self.billing_day}")
         logging.info(f"  SOLAREDGE_POLL_INTERVAL: {self.poll_interval} min")
         logging.info(f"  SOLAREDGE_SLEEP_START: {self.sleep_start_hour}:00")
         logging.info(f"  SOLAREDGE_SLEEP_END: {self.sleep_end_hour}:00")
         awake = self._awake_hours()
         if awake > MAX_AWAKE_HOURS:
             logging.warning(
-                f"Daytime window is {awake} h (> {MAX_AWAKE_HOURS} h) and may exceed the interim API call budget"
+                f"Daytime window is {awake} h (> {MAX_AWAKE_HOURS} h) and may exceed the API call budget"
             )
         logging.info(f"  SOLAREDGE_DEBUG: {self.debug}")
         logging.info(f"  SOLAREDGE_LOG_LEVEL: {self.log_level}")
@@ -190,7 +211,7 @@ class Config:
             logging.info("  Forecast: disabled (incomplete configuration)")
 
     def _awake_hours(self) -> int:
-        """Hours per day outside the sleep window (same rule as main.is_sleep_time)."""
+        """Hours per day outside the sleep window (same rule as FetchPlan.is_night)."""
         start, end = self.sleep_start_hour, self.sleep_end_hour
         if start == end:
             return 24
