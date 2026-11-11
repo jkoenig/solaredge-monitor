@@ -21,6 +21,7 @@ from solaredge_api import (  # noqa: E402
     last_non_null,
     to_kwh,
 )
+from call_counter import QuotaBlocked  # noqa: E402
 from token_store import LoginRequired, TransientAuthError  # noqa: E402
 
 FAKE_SITE_ID = "98765432"
@@ -552,6 +553,50 @@ class ModelsCleanupTests(unittest.TestCase):
         self.assertFalse(hasattr(models, "PowerFlow"))
         self.assertFalse(hasattr(models, "SiteOverview"))
         self.assertTrue(hasattr(solaredge_api, "SolarEdgeAPI"))
+
+
+class QuotaTests(unittest.TestCase):
+    def test_blocked_returns_none_no_retry(self):
+        api, store, sleep = make_api([QuotaBlocked("stopped")])
+        with self.assertLogs(level="WARNING") as cm:
+            self.assertIsNone(api.get_overview(retry=True))
+        self.assertEqual(store.authorized_request.call_count, 1)
+        sleep.assert_not_called()
+        out = "\n".join(cm.output)
+        self.assertIn("call budget", out)
+        self.assertIn("/sites/{site_id}/overview", out)
+        self.assertNotIn(FAKE_SITE_ID, out)
+
+    def test_monthly_429_marks_exhausted(self):
+        api, store, _ = make_api([fake_response(429, {"detail": "Monthly credit limit reached."})])
+        with self.assertLogs(level="ERROR") as cm:
+            self.assertIsNone(api.get_overview())
+        store.counter.mark_exhausted.assert_called_once_with()
+        self.assertIn("monthly credit limit", "\n".join(cm.output))
+
+    def test_per_minute_429_does_not_mark_exhausted(self):
+        api, store, _ = make_api([fake_response(429, {"message": "API rate limit exceeded"})])
+        with self.assertLogs(level="ERROR"):
+            self.assertIsNone(api.get_overview())
+        store.counter.mark_exhausted.assert_not_called()
+
+    def test_429_non_json_does_not_mark_exhausted(self):
+        api, store, _ = make_api([fake_response(429, json_error=True)])
+        with self.assertLogs(level="ERROR"):
+            self.assertIsNone(api.get_overview())
+        store.counter.mark_exhausted.assert_not_called()
+
+    def test_monthly_429_without_counter(self):
+        api, store, _ = make_api([fake_response(429, {"detail": "Monthly credit limit reached."})])
+        store.counter = None
+        with self.assertLogs(level="ERROR"):
+            self.assertIsNone(api.get_overview())
+
+    def test_history_blocked_returns_none(self):
+        api, store, _ = make_api([QuotaBlocked("stopped")])
+        with self.assertLogs(level="WARNING"):
+            self.assertIsNone(api.get_energy_history())
+        self.assertEqual(store.authorized_request.call_count, 1)
 
 
 if __name__ == "__main__":

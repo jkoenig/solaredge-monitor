@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import requests  # noqa: E402
 
 import token_store  # noqa: E402
+from call_counter import QuotaBlocked  # noqa: E402
 from token_store import (  # noqa: E402
     LoginRequired,
     TokenData,
@@ -342,6 +343,95 @@ class RefreshTests(StoreTestCase):
                 msg = rec.getMessage()
                 for s in secrets:
                     self.assertNotIn(s, msg)
+
+
+class CounterTests(StoreTestCase):
+    URL = "https://x.example/v2/sites/1/overview"
+
+    def setUp(self):
+        super().setUp()
+        self.order = []
+        self.counter = mock.MagicMock()
+        self.counter.acquire.side_effect = lambda ep: self.order.append(("acquire", ep))
+        self.store = TokenStore(self.path, "cid", SECRET, None, counter=self.counter)
+
+    def ok_body(self):
+        return {"access_token": NEW_ACCESS, "refresh_token": NEW_REFRESH, "expires_in": 7200}
+
+    def _req(self, responses):
+        def side(*a, **k):
+            self.order.append(("request",))
+            return responses.pop(0)
+
+        return mock.patch.object(self.store.session, "request", side_effect=side)
+
+    def _post(self, **kw):
+        def side(*a, **k):
+            self.order.append(("post",))
+            r = kw.get("exc")
+            if r:
+                raise r
+            return fake_response(200, self.ok_body())
+
+        return mock.patch("token_store.requests.post", side_effect=side)
+
+    def test_counts_once_before_request(self):
+        self.store.save(make_data(expires_at=time.time() + 7200))
+        with self._req([mock.MagicMock(status_code=200)]):
+            self.store.authorized_request("GET", self.URL)
+        self.counter.acquire.assert_called_once_with("overview")
+        self.assertEqual(self.order, [("acquire", "overview"), ("request",)])
+
+    def test_401_retry_counts_data_token_data(self):
+        self.store.save(make_data(expires_at=time.time() + 7200))
+        resps = [mock.MagicMock(status_code=401), mock.MagicMock(status_code=200)]
+        with self._req(resps), self._post(), self.assertLogs(level="WARNING"):
+            self.store.authorized_request("GET", self.URL)
+        self.assertEqual(
+            self.order,
+            [("acquire", "overview"), ("request",), ("acquire", "token"), ("post",),
+             ("acquire", "overview"), ("request",)],
+        )
+
+    def test_refresh_counts_before_post(self):
+        self.store.save(make_data(expires_at=NOW))
+        with self._post():
+            self.store.get_access_token(NOW)
+        self.assertEqual(self.order, [("acquire", "token"), ("post",)])
+
+    def test_blocked_request_not_sent(self):
+        self.store.save(make_data(expires_at=time.time() + 7200))
+        self.counter.acquire.side_effect = QuotaBlocked("stopped")
+        with self._req([]) as req:
+            with self.assertRaises(QuotaBlocked):
+                self.store.authorized_request("GET", self.URL)
+        req.assert_not_called()
+
+    def test_blocked_refresh_not_sent_and_not_login_required(self):
+        self.store.save(make_data(expires_at=NOW))
+        before = self.path.read_bytes()
+        self.counter.acquire.side_effect = QuotaBlocked("stopped")
+        with mock.patch("token_store.requests.post") as post:
+            with self.assertRaises(QuotaBlocked):
+                self.store.get_access_token(NOW)
+            with self.assertRaises(QuotaBlocked):
+                self.store.force_refresh(OLD_ACCESS, NOW)
+        post.assert_not_called()
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_timed_out_refresh_still_counted_once(self):
+        self.store.save(make_data(expires_at=NOW - 10))
+        with self._post(exc=requests.exceptions.Timeout()), self.assertLogs(level="WARNING"):
+            with self.assertRaises(TransientAuthError):
+                self.store.get_access_token(NOW)
+        self.counter.acquire.assert_called_once_with("token")
+
+    def test_no_counter_behaves_as_before(self):
+        store = TokenStore(self.path, "cid", SECRET)
+        self.assertIsNone(store.counter)
+        store.save(make_data(expires_at=time.time() + 7200))
+        with mock.patch.object(store.session, "request", return_value=mock.MagicMock(status_code=200)):
+            self.assertEqual(store.authorized_request("GET", self.URL).status_code, 200)
 
 
 if __name__ == "__main__":

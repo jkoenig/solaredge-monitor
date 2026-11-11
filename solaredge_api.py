@@ -6,7 +6,8 @@ only get_overview may retry, once, on 5xx or timeout. All other jobs make one
 attempt. 400/403/404/429 are never retried.
 
 All public methods return None on any fetch or parse failure so the caller can
-keep showing stale data. LoginRequired is deliberately not caught: it
+keep showing stale data. QuotaBlocked (call budget stopped) also returns None;
+a 429 with the monthly-limit detail switches the call counter to stopped. LoginRequired is deliberately not caught: it
 propagates to main.py, which shows the login screen.
 
 Logs never contain the site id, serial numbers, tokens, params or response
@@ -23,11 +24,13 @@ from zoneinfo import ZoneInfo
 import requests
 
 from models import BatteryData, EnergyDetails, EnergyHistory
+from call_counter import QuotaBlocked
 from token_store import TransientAuthError
 
 SITE_TZ = ZoneInfo("Europe/Zurich")
 BASE_URL = "https://monitoringapi.solaredge.com/v2"
 IDLE_THRESHOLD_W = 50
+MONTHLY_LIMIT_DETAIL = "Monthly credit limit reached."
 
 _UNIT_FACTORS_TO_KWH = {
     "WH": 0.001,
@@ -111,6 +114,9 @@ class SolarEdgeAPI:
             except TransientAuthError:
                 logging.warning(f"API auth refresh deferred: {path_template}")
                 return None
+            except QuotaBlocked as e:
+                logging.warning(f"API call skipped, call budget blocked ({e.reason}): {path_template}")
+                return None
             except requests.exceptions.RequestException as e:
                 logging.error(f"API request failed: {path_template} ({type(e).__name__})")
                 return None
@@ -135,6 +141,18 @@ class SolarEdgeAPI:
                     f"API HTTP error 429: {path_template} "
                     f"(x-ratelimit-remaining-minute={remaining})"
                 )
+                try:
+                    err_body = resp.json()
+                except ValueError:
+                    err_body = None
+                if isinstance(err_body, dict) and err_body.get("detail") == MONTHLY_LIMIT_DETAIL:
+                    counter = getattr(self.token_store, "counter", None)
+                    if counter is not None:
+                        counter.mark_exhausted()
+                    logging.error(
+                        "SolarEdge monthly credit limit reached; "
+                        "all API calls stop until the next billing cycle"
+                    )
                 return None
             if status >= 400:
                 logging.error(f"API HTTP error {status}: {path_template}")
