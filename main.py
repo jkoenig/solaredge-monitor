@@ -59,7 +59,7 @@ from fetcher import (
     export_fetch_state,
     restore_fetch_state,
 )
-from call_counter import CallCounter, QuotaBlocked, HARD_LIMIT, try_lock_counter
+from call_counter import CallCounter, QuotaBlocked, HARD_LIMIT, lock_path_for, try_lock_counter
 from forecast_api import ForecastSolarAPI
 from display import Display
 from screens import get_screens
@@ -306,7 +306,20 @@ def main():
     logging.info(f"Display initialized (backend: {display.backend})")
 
     # Persistent call counter (soft brake / hard stop, daily summary)
-    if not try_lock_counter(config.call_counter_file, hold=True):
+    # Fail closed: without the lock a second writer could corrupt the count,
+    # so an unopenable lock file (permissions, read-only FS) also exits
+    # non-zero instead of running unlocked.
+    try:
+        locked = try_lock_counter(config.call_counter_file, hold=True)
+    except OSError as exc:
+        logging.error(
+            f"Cannot open or lock call counter lock file "
+            f"{lock_path_for(config.call_counter_file)}: {exc}; refusing to start "
+            "(check ownership/permissions, e.g. a root-owned lock file left by a "
+            "sudo seed run)"
+        )
+        sys.exit(1)
+    if not locked:
         logging.error(
             "Call counter file is locked by another process; refusing to start "
             "(a second writer would corrupt the call count)"

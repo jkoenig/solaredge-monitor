@@ -236,6 +236,40 @@ class LockTests(CounterTestBase):
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
 
+class LockErrorTests(CounterTestBase):
+    def test_held_returns_false_but_open_error_raises(self):
+        import fcntl
+        fd = os.open(str(call_counter.lock_path_for(self.path)),
+                     os.O_RDWR | os.O_CREAT, 0o600)
+        self.addCleanup(os.close, fd)
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        self.assertFalse(call_counter.try_lock_counter(self.path))
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        with mock.patch("call_counter.os.open", side_effect=PermissionError(13, "denied")):
+            with self.assertRaises(PermissionError):
+                call_counter.try_lock_counter(self.path)
+
+    def test_main_exits_nonzero_naming_path_when_lock_unopenable(self):
+        import main
+        cfg = mock.MagicMock()
+        cfg.call_counter_file = str(self.path)
+        cfg.log_level = "INFO"
+        with mock.patch.object(main, "Config", return_value=cfg), \
+                mock.patch.object(main, "Display"), \
+                mock.patch.object(main, "setup_logging"), \
+                mock.patch.object(main.signal, "signal"), \
+                mock.patch.object(main, "try_lock_counter",
+                                  side_effect=PermissionError(13, "Permission denied")):
+            with self.assertLogs(level="ERROR") as cm:
+                with self.assertRaises(SystemExit) as ex:
+                    main.main()
+        self.assertEqual(ex.exception.code, 1)
+        text = "\n".join(cm.output)
+        self.assertIn(str(call_counter.lock_path_for(self.path)), text)
+        self.assertIn("Permission denied", text)
+        self.assertNotIn("locked by another process", text)
+
+
 class StateTests(CounterTestBase):
     def test_thresholds(self):
         t = zt(2026, 11, 11)

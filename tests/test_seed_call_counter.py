@@ -111,6 +111,25 @@ class SeedTests(unittest.TestCase):
         fcntl.flock(fd, fcntl.LOCK_UN)
         self.assertEqual(run(["--count", "5", "--file", self.file])[0], 0)
 
+    def test_lock_file_unopenable_reports_distinct_exit_code(self):
+        err = io.StringIO()
+        with mock.patch("call_counter.os.open", side_effect=PermissionError(13, "denied")), \
+                mock.patch("sys.stdin", io.StringIO("")), \
+                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            code = sc.main(["--count", "5", "--file", self.file])
+        self.assertEqual(code, 4)
+        self.assertIn("denied", err.getvalue())
+        self.assertIn(".calls.json.lock", err.getvalue())
+        self.assertNotIn("in use by a running service", err.getvalue())
+        self.assertFalse(os.path.exists(self.file))
+
+    def test_reseed_after_corrupt_file(self):
+        with open(self.file, "w") as f:
+            f.write("garbage")
+        code, _ = run(["--count", "100", "--margin", "0", "--force", "--file", self.file])
+        self.assertEqual(code, 0)
+        self.assertEqual(self.total(), 100)
+
     def test_file_mode_and_no_ids(self):
         run(["--from-journal", "--file", self.file], "\n".join(JOURNAL))
         self.assertEqual(stat.S_IMODE(os.stat(self.file).st_mode), 0o600)

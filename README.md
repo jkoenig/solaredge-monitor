@@ -141,6 +141,8 @@ One-off seed at deploy (stop the service first, then start it again afterwards):
 journalctl -u solaredge-monitor --since "YYYY-MM-DD 00:00" -o cat | venv/bin/python3 scripts/seed_call_counter.py --from-journal --margin 20
 ```
 
+Exit codes: 0 ok, 1 counter file not written, 2 invalid arguments, 3 the service holds the counter lock (stop it first), 4 the lock file `.calls.json.lock` cannot be opened (permissions, e.g. a root-owned file from an earlier `sudo` run; fix its ownership). The service itself refuses to start (exit 1, ERROR log naming the path) in the same case. If `.calls.json` was corrupt, it is kept as `.calls.json.corrupt` and the counter starts at the soft limit until re-seeded (use `--force` to lower it).
+
 ## Development (without hardware)
 
 You can test the monitor without a Raspberry Pi or e-ink display using debug mode.

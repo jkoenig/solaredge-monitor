@@ -122,22 +122,25 @@ def try_lock_counter(counter_path: Union[str, Path], hold: bool = False) -> bool
 
     The service holds it for its whole lifetime (hold=True) so that no second
     writer (seed script, second instance) can clobber the in-memory count.
-    Returns False if another process holds it. With hold=True the lock is kept
-    (idempotent per path within a process); otherwise it is released at once
-    (a pure "is anyone running" probe).
+    Returns False only if another process holds it. If the lock file cannot be
+    opened/created or flock fails for another reason (EACCES, missing directory,
+    read-only FS ...), the OSError is raised so callers can tell "held" from
+    "cannot lock". With hold=True the lock is kept (idempotent per path within
+    a process); otherwise it is released at once (a pure "is anyone running"
+    probe).
     """
     key = str(lock_path_for(counter_path))
     if key in _HELD_LOCKS:
         return True
-    try:
-        fd = os.open(key, os.O_RDWR | os.O_CREAT, 0o600)
-    except OSError:
-        return False
+    fd = os.open(key, os.O_RDWR | os.O_CREAT, 0o600)  # OSError propagates
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError:
+    except BlockingIOError:
         os.close(fd)
         return False
+    except OSError:
+        os.close(fd)
+        raise
     if hold:
         _HELD_LOCKS[key] = fd
     else:

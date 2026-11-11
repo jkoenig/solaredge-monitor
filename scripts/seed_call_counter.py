@@ -36,6 +36,7 @@ from call_counter import (  # noqa: E402
     DEFAULT_BILLING_DAY,
     HARD_LIMIT,
     CallCounter,
+    lock_path_for,
     try_lock_counter,
 )
 
@@ -93,7 +94,18 @@ def main(argv: Optional[list] = None) -> int:
 
     # The service holds an flock on <file>.lock while running: refuse to seed
     # then, its in-memory count would overwrite the seeded value.
-    if not try_lock_counter(path):
+    try:
+        locked = try_lock_counter(path)
+    except OSError as exc:
+        print(
+            f"Error: cannot open or lock the counter lock file "
+            f"{lock_path_for(path)} ({exc}); this is a permission or filesystem "
+            "problem, not a running service. Fix ownership of the file or "
+            "re-run as the service user.",
+            file=sys.stderr,
+        )
+        return 4
+    if not locked:
         print(
             "Error: the counter is in use by a running service. "
             "Stop it first (sudo systemctl stop solaredge-monitor).",
