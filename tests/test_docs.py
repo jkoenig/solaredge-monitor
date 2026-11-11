@@ -30,5 +30,53 @@ class EnvExampleTest(unittest.TestCase):
         self.assertIsNone(FORBIDDEN.search(self.text))
 
 
+class ReadmeTest(unittest.TestCase):
+    HEADINGS = [
+        "## Hardware",
+        "## SolarEdge-API-Zugang",
+        "## Installation",
+        "## Login-Skript",
+        "## Re-Login nach mehr als 14 Tagen offline",
+        "## API-Kontingent und Zähler",
+        "## Fehlerbehebung",
+        "## Deployment",
+    ]
+    MENTIONS = [
+        "solaredge_login.py",
+        "solaredge_login.example.ini",
+        "seed_call_counter.py",
+        "--from-journal",
+        "--margin 20",
+        "Login nötig",
+        "Kontingent aufgebraucht",
+        "time-sync.target",
+        "./deploy.sh",
+    ]
+
+    def setUp(self):
+        self.text = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    def test_headings(self):
+        for heading in self.HEADINGS:
+            self.assertIn(heading + "\n", self.text)
+
+    def test_mentions(self):
+        for needle in self.MENTIONS:
+            self.assertIn(needle, self.text)
+
+    def test_screenshots_linked_and_present(self):
+        links = set(re.findall(r"docs/screens/[a-z-]+\.png", self.text))
+        for link in links:
+            self.assertTrue((ROOT / link).is_file(), link)
+        on_disk = {f"docs/screens/{p.name}" for p in (ROOT / "docs/screens").glob("*.png")}
+        self.assertEqual(len(on_disk), 12)
+        self.assertEqual(links, on_disk)
+
+    def test_no_internal_references(self):
+        self.assertNotIn(".planning", self.text)
+        self.assertNotIn("docs/screen-", self.text)
+        self.assertIsNone(re.search(r"\bD-\d+", self.text))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,316 +1,168 @@
 # SolarEdge Off-Grid Monitor
 
-A Raspberry Pi-powered e-ink display that shows your SolarEdge solar energy data at a glance — production, consumption, grid feed-in, purchased energy, battery state, solar forecast, and 2-week history.
+Ein E-Ink-Display auf Basis eines Raspberry Pi Zero, das die Daten einer SolarEdge-Anlage auf einen Blick zeigt: Produktion, Verbrauch, Einspeisung, Netzbezug, Hausakku, Solarprognose und einen 14-Tage-Verlauf. Die Anzeige wechselt automatisch zwischen den Bildschirmen und läuft als systemd-Dienst.
 
-The display cycles through up to 9 screens, each showing a daily energy metric with a proportional bar and breakdown, plus a solar forecast screen powered by Forecast.Solar, and two 14-day histogram screens. The battery and forecast screens are optional — battery is auto-detected at startup, forecast is enabled when configured. Updates every 5 minutes. Sleeps at night. Runs as a systemd service on your Pi.
-
-## Screens
+## Bildschirme
 
 | Produktion | Verbrauch |
 |:---:|:---:|
-| ![Produktion](docs/screen-produktion.png) | ![Verbrauch](docs/screen-verbrauch.png) |
+| ![Produktion](docs/screens/produktion.png) | ![Verbrauch](docs/screens/verbrauch.png) |
 | **Einspeisung** | **Netzbezug** |
-| ![Einspeisung](docs/screen-einspeisung.png) | ![Netzbezug](docs/screen-bezug.png) |
+| ![Einspeisung](docs/screens/einspeisung.png) | ![Netzbezug](docs/screens/bezug.png) |
 | **Hausakku (Laden)** | **Hausakku (Entladen)** |
-| ![Hausakku Laden](docs/screen-hausakku-charging.png) | ![Hausakku Entladen](docs/screen-hausakku-discharging.png) |
+| ![Hausakku Laden](docs/screens/hausakku-charging.png) | ![Hausakku Entladen](docs/screens/hausakku-discharging.png) |
+| **Hausakku (Ruhe)** | **Prognose** |
+| ![Hausakku Ruhe](docs/screens/hausakku-idle.png) | ![Prognose](docs/screens/prognose.png) |
 | **Verlauf Produktion** | **Verlauf Verbrauch** |
-| ![Verlauf Produktion](docs/screen-verlauf-produktion.png) | ![Verlauf Verbrauch](docs/screen-verlauf-verbrauch.png) |
-| **Prognose** | |
-| ![Prognose](docs/screen-prognose.png) | |
+| ![Verlauf Produktion](docs/screens/verlauf-produktion.png) | ![Verlauf Verbrauch](docs/screens/verlauf-verbrauch.png) |
+| **Login nötig** | **Kontingent aufgebraucht** |
+| ![Login nötig](docs/screens/login-noetig.png) | ![Kontingent aufgebraucht](docs/screens/kontingent-aufgebraucht.png) |
+
+Die Beispielbilder entstehen offline aus erfundenen Werten (`scripts/render_doc_screens.py`). Der Hausakku-Bildschirm erscheint nur, wenn die Anlage eine Batterie hat (automatische Erkennung beim Start), der Prognose-Bildschirm nur, wenn die Prognose konfiguriert ist. Die beiden letzten Bilder sind Hinweisbildschirme: "Login nötig" ersetzt die Rotation, wenn der Zugang erneuert werden muss, "Kontingent aufgebraucht" erscheint, solange das API-Kontingent erschöpft ist.
 
 ## Hardware
 
-| Part | Model |
-|------|-------|
-| Computer | Raspberry Pi Zero WH v1.1 (1 GHz, 512 MB RAM, WLAN, BT)
-| Display | DEBO EPA 2.1 — 2.13" e-paper, black/white (Waveshare compatible)
-| Power supply | Official RPi PSU, 5.1V / 2.5A, micro-USB
-| Storage | SanDisk Ultra microSDXC 64GB
+| Teil | Modell |
+|------|--------|
+| Rechner | Raspberry Pi Zero WH (WLAN, vorgelötete Stiftleiste) |
+| Display | Waveshare 2.13" e-Paper V3 (250x122, schwarz/weiß) |
+| Netzteil | 5 V, mindestens 2,5 A, Micro-USB |
+| Speicher | microSD-Karte, 16 GB oder mehr |
 
-Total: ~CHF 49
+Außerdem nötig: eine SolarEdge-Anlage mit Zugang zum Monitoring-Portal (mySolarEdge). Eine Batterie ist optional.
 
-## How It Works
+## SolarEdge-API-Zugang
 
-1. **Fetches energy data** from the SolarEdge monitoring API every 5 minutes
-2. **Renders screens** at 4x resolution (1000x488) using PIL for high-quality output
-3. **Downsamples to 250x122** with LANCZOS resampling for crisp e-ink text
-4. **Cycles through screens** on the display (Production → Consumption → Feed-in → Purchased → Battery if installed → Forecast if configured → History)
-5. **Sleeps between midnight and 6 AM** when there's no solar production
+Der Monitor nutzt die SolarEdge-API V2 mit OAuth. Du brauchst dafür:
 
-## Prerequisites
+1. Ein Entwicklerkonto im SolarEdge-Monitoring und dort eine eigene OAuth-App. Als Redirect-URI trägst du `http://localhost:8765/callback` ein.
+2. Client-ID und Client-Secret der App. Lege sie in einem Passwortmanager ab, zum Beispiel in einem 1Password-Eintrag "SolarEdge API". Das Login-Skript liest sie von dort.
 
-Before you start, you'll need:
+Wichtige Eigenschaften der API:
 
-- **Raspberry Pi Zero WH** with Raspberry Pi OS and SSH access
-- **Python 3.9+** (pre-installed on Raspberry Pi OS)
-- **SolarEdge monitoring account** with API access
-- **SolarEdge API key** ([how to get one](https://knowledge-center.solaredge.com/sites/kc/files/se_monitoring_api.pdf))
-- **SolarEdge site ID** (found in your monitoring portal URL)
+- Das kostenlose Kontingent beträgt 2000 Aufrufe pro Monat (und 10 Aufrufe pro Minute) für das gesamte Entwicklerkonto. Jeder Aufruf kostet einen Punkt. Der Monat beginnt am Tag, an dem das Konto angelegt wurde. Diesen Tag zeigt die Entwicklerkonsole im Reiter "Usage".
+- Ein Zugriffstoken gilt 2 Stunden. Das Refresh-Token wird bei jeder Erneuerung ausgetauscht und verfällt, wenn es 14 Tage lang nicht benutzt wird. Das Einverständnis selbst gilt bis zu 24 Monate.
+- Nur der Pi erneuert Tokens. Eine Erneuerung auf einem anderen Rechner würde das Token des Pi ungültig machen.
 
-## Quick Start (Raspberry Pi)
+## Installation
 
-The fastest way to get running on your Pi is to use the install script:
+Voraussetzungen: Raspberry Pi OS Bookworm, Zugriff per SSH (`ssh <pi-host>`), der Benutzer `pi`.
 
 ```bash
-# Clone the repository
-git clone https://github.com/YOUR_USERNAME/solaredge-offgrid-monitor.git /home/pi/solaredge-monitor
+git clone https://github.com/jkoenig/solaredge-monitor.git /home/pi/solaredge-monitor
 cd /home/pi/solaredge-monitor
-
-# Run the install script (sets up everything: SPI, venv, service)
 ./install.sh
+```
 
-# Edit your credentials
-nano .env
+`install.sh` aktiviert SPI, legt die virtuelle Python-Umgebung an, installiert die Abhängigkeiten, erzeugt `.env` aus `.env.example` und installiert die systemd-Unit. Nicht als root ausführen. Danach:
 
-# Start the service
+1. `.env` anpassen (`nano .env`); alle Optionen sind in `.env.example` erklärt. Client-ID und Secret schreibt später das Login-Skript.
+2. Den Pi neu starten, falls das Skript es verlangt (SPI- und Gruppenrechte).
+3. Prüfen, dass die Zeitsynchronisation aktiv ist: `timedatectl show -p NTPSynchronized` muss `yes` liefern. Der Pi Zero hat keine Echtzeituhr; der Dienst wartet beim Start auf `time-sync.target`, damit die Zeitfenster der API-Aufrufe stimmen.
+4. Das Login durchführen (nächster Abschnitt), dann startet der Dienst die Anzeige.
+
+## Login-Skript
+
+`scripts/solaredge_login.py` läuft auf dem Mac (oder einem anderen Rechner mit Browser), nicht auf dem Pi. Es nutzt nur die Python-Standardbibliothek und braucht die Programme `op` (1Password-Kommandozeile), `ssh` und `scp`.
+
+Einrichtung:
+
+```bash
+cp scripts/solaredge_login.example.ini scripts/solaredge_login.local.ini
+```
+
+`solaredge_login.local.ini` wird von git ignoriert. Trage dort `host` (Adresse des Pi, zum Beispiel `<pi-host>`), `remote_dir`, `op_item` (Name oder ID des Passwortmanager-Eintrags) und bei mehreren Konten `op_account` ein.
+
+Login:
+
+```bash
+python3 scripts/solaredge_login.py
+```
+
+Das Skript liest Client-ID und Secret aus 1Password, schreibt sie in die `.env` des Pi, öffnet die SolarEdge-Zustimmungsseite im Browser, tauscht den zurückgelieferten Code sofort gegen Tokens und lädt die Token-Datei auf den Pi hoch. Alle lokalen Kopien werden danach gelöscht. Mit `--secrets-only` werden nur Client-ID und Secret in die `.env` geschrieben. Der Mac erneuert nie Tokens, das übernimmt allein der Pi.
+
+## Re-Login nach mehr als 14 Tagen offline
+
+Ist der Pi länger als 14 Tage ausgeschaltet oder ohne Netz, verfällt das Refresh-Token. Der Monitor zeigt dann den Bildschirm "Login nötig" und macht keine weiteren Aufrufe. Abhilfe: auf dem Mac erneut `python3 scripts/solaredge_login.py` ausführen. Der Dienst erkennt die neue Token-Datei selbst und nimmt die Anzeige ohne Neustart wieder auf.
+
+## API-Kontingent und Zähler
+
+Weil jeder Aufruf Kontingent kostet, zählt der Monitor mit. Der Zähler liegt in `.calls.json` neben der Token-Datei und richtet sich nach `SOLAREDGE_BILLING_DAY`, dem Tag im Monat, an dem das SolarEdge-Kontingent zurückgesetzt wird (Default 5).
+
+- Ab 1500 Aufrufen im Zyklus greift eine weiche Bremse: nur noch unverzichtbare Aufrufe.
+- Bei 1800 Aufrufen stoppt der Monitor alle Aufrufe bis zum Zyklusende und zeigt "Kontingent aufgebraucht" mit dem Datum der nächsten Werte.
+
+Einmal täglich schreibt der Dienst eine Zusammenfassung ins Journal, zum Beispiel:
+
+```
+Calls YYYY-MM-DD: 41 (overview 26, storage 12, history 1, token 2); cycle 530/1800
+```
+
+### Zähler setzen
+
+Bei einer Neuinstallation, oder wenn der Dienst schon ohne Zähler lief, setzt du den Zähler einmalig auf den tatsächlichen Verbrauch. Als der Benutzer, der den Dienst betreibt, niemals mit `sudo` (sonst gehört die Sperrdatei root und der Dienst startet nicht mehr):
+
+```bash
+sudo systemctl stop solaredge-monitor
+journalctl -u solaredge-monitor --since "YYYY-MM-DD 00:00" -o cat \
+  | venv/bin/python3 scripts/seed_call_counter.py --from-journal --margin 20
 sudo systemctl start solaredge-monitor
 ```
 
-The install script will:
-- Enable SPI interface (required for the display)
-- Create a Python virtual environment
-- Install dependencies
-- Set up the systemd service
-- Create an .env file from the template
+`YYYY-MM-DD` ist der erste Tag, an dem der Dienst lief, oder der Beginn des aktuellen Abrechnungszyklus, falls der später liegt. `--margin 20` addiert einen Sicherheitsaufschlag für Aufrufe außerhalb des Dienstes. Mit einer bekannten Zahl geht es auch ohne Journal: `scripts/seed_call_counter.py --count 300 --margin 20`.
 
-## Configuration
+Exit-Codes von `seed_call_counter.py`:
 
-All configuration is managed through environment variables in the `.env` file.
+| Code | Bedeutung |
+|------|-----------|
+| 0 | Zähler gesetzt |
+| 1 | Zählerdatei konnte nicht geschrieben werden |
+| 2 | Ungültige Eingabe (negative Zahl, Abrechnungstag außerhalb 1-31) |
+| 3 | Der Dienst läuft noch und hält die Sperre; erst stoppen |
+| 4 | Die Sperrdatei lässt sich nicht öffnen (zum Beispiel gehört sie root) |
 
-Copy `.env.example` to `.env` and configure:
+Ein bereits höherer Zählerstand wird nicht gesenkt, außer mit `--force`.
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `SOLAREDGE_SITE_ID` | Yes | — | Your SolarEdge site ID |
-| `SOLAREDGE_POLL_INTERVAL` | No | `30` | Minutes between API polls (minimum: 30, every API call costs a credit) |
-| `SOLAREDGE_SLEEP_START` | No | `20` | Hour the night plan starts (0-23): display keeps rotating, only battery calls about every 3 h |
-| `SOLAREDGE_SLEEP_END` | No | `7` | Hour the day plan starts (0-23) |
-| `SOLAREDGE_BILLING_DAY` | No | `5` | Day of month the SolarEdge credit cycle resets (1-31; last day of month if shorter) |
-| `SOLAREDGE_CALL_COUNTER_FILE` | No | `.calls.json` next to the token file | Call counter file |
-| `SOLAREDGE_DEBUG` | No | `false` | Enable debug mode (saves PNG files instead of using display) |
-| `SOLAREDGE_LOG_LEVEL` | No | `INFO` | Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL |
-| | | | **Solar Forecast** (optional) |
-| `FORECAST_LAT` | No | — | Latitude of solar installation (-90 to 90) |
-| `FORECAST_LON` | No | — | Longitude of solar installation (-180 to 180) |
-| `FORECAST_TILT` | No | — | Panel tilt angle in degrees (0 = horizontal, 90 = vertical) |
-| `FORECAST_AZIMUTH` | No | — | Panel orientation in degrees (-180 to 180, 0 = south, -90 = east, 90 = west) |
-| `FORECAST_KWP` | No | — | Installed peak power in kilowatt-peak (kWp) |
+## Fehlerbehebung
 
-**Note:** The forecast screen uses the free [Forecast.Solar](https://forecast.solar) API (no API key required). All 5 forecast variables must be set to enable the forecast screen.
+**Bildschirm "Login nötig":** Das Token ist unbrauchbar, meist nach mehr als 14 Tagen Pause. Siehe "Re-Login nach mehr als 14 Tagen offline".
 
-Example `.env`:
+**Bildschirm "Kontingent aufgebraucht":** Das Monatskontingent ist verbraucht oder der Zähler hat die Grenze erreicht. Die Anzeige bleibt bis zum angezeigten Datum so. Prüfe in der Entwicklerkonsole den tatsächlichen Verbrauch und gleiche bei Abweichung den Zähler an (siehe "Zähler setzen").
 
-```env
-SOLAREDGE_SITE_ID=your_site_id_here
-SOLAREDGE_POLL_INTERVAL=30
-SOLAREDGE_SLEEP_START=20
-SOLAREDGE_SLEEP_END=7
-SOLAREDGE_DEBUG=false
-SOLAREDGE_LOG_LEVEL=INFO
+**Display bleibt nach dem Booten leer:** Gewollt, solange die Uhrzeit nicht synchronisiert ist; der Dienst wartet auf `time-sync.target`. Prüfe das Netzwerk, `systemctl list-jobs` und `timedatectl`.
 
-# Solar Forecast (optional — uncomment and fill to enable)
-# FORECAST_LAT=48.1351
-# FORECAST_LON=11.5820
-# FORECAST_TILT=30
-# FORECAST_AZIMUTH=0
-# FORECAST_KWP=9.8
-```
+**Dienst startet nicht:** `sudo journalctl -u solaredge-monitor -n 50` zeigt den Grund. Häufige Ursache: eine Sperrdatei `.calls.json.lock`, die root gehört, weil das Seed-Skript mit `sudo` lief. Mit `sudo chown pi:pi .calls.json.lock` beheben.
 
-## API call budget
+**"Permission denied" auf SPI:** Benutzer in die Gruppen `spi` und `gpio` aufnehmen (`sudo usermod -a -G spi,gpio pi`) und neu starten.
 
-The free SolarEdge tier gives 2,000 credits per month. The monitor plans its calls to stay well below that.
-
-- **Day plan:** overview every 30 minutes from 07:00 to 20:00, battery storage hourly, history once a day, temperature twice.
-- **Night plan:** only battery storage, at about 23:00, 02:00 and 05:00. The display keeps rotating the last values.
-- **Counting:** every SolarEdge request, including retries and token refreshes, is counted in `.calls.json`. Forecast.Solar calls are not counted.
-- **Soft brake at 1,500:** overview only hourly, no night calls.
-- **Hard stop at 1,800:** no calls at all, the last values stay on screen, and the display shows "Kontingent aufgebraucht / Neue Werte ab D.M.". A SolarEdge "Monthly credit limit reached." response also stops the calls.
-- **Reset:** at 00:00 on the billing day (`SOLAREDGE_BILLING_DAY`).
-
-How to check the budget from your Mac:
+**Logs ansehen:**
 
 ```bash
-ssh raspberrypi.local 'journalctl -u solaredge-monitor --since today -o cat | grep "Calls "'
+journalctl -u solaredge-monitor -f
 ```
-
-The daily line looks like `Calls 2025-01-15: 41 (overview 22, storage 11, history 2, temperature 2, token 4); cycle 300/1800`. `cat .calls.json` shows per-day totals of the current and previous cycle. Compare with the Usage tab in the SolarEdge console.
-
-One-off seed at deploy (stop the service first, then start it again afterwards):
-
-```bash
-journalctl -u solaredge-monitor --since "YYYY-MM-DD 00:00" -o cat | venv/bin/python3 scripts/seed_call_counter.py --from-journal --margin 20
-```
-
-Exit codes: 0 ok, 1 counter file not written, 2 invalid arguments, 3 the service holds the counter lock (stop it first), 4 the lock file `.calls.json.lock` cannot be opened (permissions, e.g. a root-owned file from an earlier `sudo` run; fix its ownership). The service itself refuses to start (exit 1, ERROR log naming the path) in the same case. If `.calls.json` was corrupt, it is kept as `.calls.json.corrupt` and the counter starts at the soft limit until re-seeded (use `--force` to lower it).
-
-## Development (without hardware)
-
-You can test the monitor without a Raspberry Pi or e-ink display using debug mode.
-
-Debug mode renders screens to PNG files in the `debug/` folder instead of driving the display:
-
-```bash
-# Install dependencies
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# Copy and configure .env
-cp .env.example .env
-nano .env
-
-# Run in debug mode
-SOLAREDGE_DEBUG=true python3 main.py
-```
-
-Check the `debug/` folder for PNG output files showing what would appear on the display.
 
 ## Deployment
 
-After initial setup, use the deploy script to update the monitor with code changes:
+Updates spielst du auf dem Pi als Benutzer `pi` ein, nicht als root:
 
 ```bash
-ssh pi@raspberrypi
+ssh <pi-host>
 cd /home/pi/solaredge-monitor
 ./deploy.sh
 ```
 
-The deploy script will:
-- Pull the latest code from git
-- Install/update dependencies
-- Restart the systemd service
+`./deploy.sh` holt den neuen Code per `git pull`, aktualisiert die Abhängigkeiten, installiert die systemd-Unit, falls sie sich geändert hat, und startet den Dienst neu.
 
-## Useful Commands
-
-Quick reference for managing the monitor service:
+## Entwicklung ohne Hardware
 
 ```bash
-# Check service status
-sudo systemctl status solaredge-monitor
-
-# Follow live logs
-journalctl -u solaredge-monitor -f
-
-# View recent logs (last 50 lines)
-journalctl -u solaredge-monitor -n 50
-
-# Stop the service
-sudo systemctl stop solaredge-monitor
-
-# Start the service
-sudo systemctl start solaredge-monitor
-
-# Restart the service
-sudo systemctl restart solaredge-monitor
-
-# Disable service (won't start on boot)
-sudo systemctl disable solaredge-monitor
-
-# Enable service (starts on boot)
-sudo systemctl enable solaredge-monitor
+pip install -r requirements.txt
+cp .env.example .env
+SOLAREDGE_DEBUG=true python3 main.py
 ```
 
-## Troubleshooting
+Im Debug-Modus landen die Bilder im Ordner `debug/`. Die Tests laufen mit `python -m unittest discover -s tests`. Die Beispielbilder für dieses README erzeugst du mit `python scripts/render_doc_screens.py`.
 
-### Service won't start
-
-**Check the logs:**
-```bash
-journalctl -u solaredge-monitor -n 20
-```
-
-**Common causes:**
-- Missing or invalid `.env` configuration (check the token file and the display for "Login nötig"; `SOLAREDGE_SITE_ID` is optional)
-- Invalid log level in `SOLAREDGE_LOG_LEVEL` (must be DEBUG, INFO, WARNING, ERROR, or CRITICAL)
-- Missing dependencies (run `./deploy.sh` to reinstall)
-
-### "Permission denied" on SPI
-
-The display requires SPI access. Fix with:
-
-```bash
-# Enable SPI
-sudo raspi-config
-# → Interface Options → SPI → Enable
-sudo reboot
-
-# Add user to required groups
-sudo usermod -a -G spi,gpio pi
-```
-
-### "start request repeated too quickly"
-
-This means the service is crashing immediately after startup. Check logs:
-
-```bash
-journalctl -u solaredge-monitor -n 50
-```
-
-Usually caused by:
-- Python exceptions on startup (check for typos in .env)
-- Import errors (missing dependencies)
-- Invalid API credentials
-
-### Blank display
-
-**Verify the service is running:**
-```bash
-sudo systemctl status solaredge-monitor
-```
-
-**Check SPI wiring:**
-- Display connected to GPIO pins as per Waveshare documentation
-- SPI enabled in `raspi-config`
-
-**Check logs for errors:**
-```bash
-journalctl -u solaredge-monitor -f
-```
-
-### API rate limiting
-
-SolarEdge has rate limits on their API. If you see 429 errors in logs:
-
-- Increase `SOLAREDGE_POLL_INTERVAL` in `.env` (default: 30 minutes, minimum: 30)
-- The monitor automatically retries with exponential backoff
-
-## Project Structure
-
-```
-.
-├── main.py                    # Entry point — polling loop and screen cycling
-├── config.py                  # Environment-based configuration
-├── solaredge_api.py           # SolarEdge API client with retry logic
-├── models.py                  # Data models (EnergyDetails, EnergyHistory, BatteryData, ForecastData)
-├── fetch_schedule.py          # Interim fetch cadence (which endpoint is due when)
-├── fetcher.py                 # One fetch round: due jobs -> data cache, today-bar patch
-├── battery_cache.py           # Battery presence cache (.battery.json)
-├── display.py                 # Display abstraction (e-ink / PNG debug mode)
-├── forecast_api.py            # Forecast.Solar API client with TTL caching
-├── logging_setup.py           # JSON logging configuration (stdout + rotating file)
-├── screens/                   # Screen renderers (one per display screen)
-│   ├── __init__.py           # Screen registry
-│   ├── production.py         # Produktion — daily production + breakdown
-│   ├── consumption.py        # Verbrauch — daily consumption + sources
-│   ├── feed_in.py            # Einspeisung — grid feed-in
-│   ├── purchased.py          # Bezug — grid purchase
-│   ├── battery.py            # Hausakku — battery state (auto-detected)
-│   ├── forecast.py           # Prognose — solar production forecast
-│   ├── history.py            # Verlauf — 14-day production/consumption histograms
-│   └── error.py              # Error screen (API failures)
-├── rendering/                 # Drawing primitives (fonts, icons, bars)
-│   ├── fonts.py              # Font loading and caching
-│   ├── icons.py              # Icon drawing (solar, house, grid, battery)
-│   └── bars.py               # Horizontal bar charts with legends
-├── fonts/                     # Arial, ArialBlack (bundled for Pi)
-├── lib/waveshare_epd/         # Waveshare e-ink driver (epd2in13_V3)
-├── install.sh                 # Initial Pi setup script
-├── deploy.sh                  # Update deployment script
-├── solaredge-monitor.service  # systemd service definition
-├── .env.example               # Configuration template
-└── requirements.txt           # Python dependencies
-```
-
-## License
+## Lizenz
 
 MIT
