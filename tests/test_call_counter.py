@@ -112,7 +112,42 @@ class PersistenceTests(CounterTestBase):
         self.assertEqual(c.state(t), BRAKE)
         corrupt = self.path.with_name(self.path.name + ".corrupt")
         self.assertEqual(corrupt.read_text(), "{not json")
+        # fail-safe state is persisted immediately (no restart window at 0)
+        self.assertEqual(json.loads(self.path.read_text())["cycle_total"],
+                         call_counter.SOFT_LIMIT)
+        with self.assertNoLogs(level="ERROR"):
+            again = self._fixed()
+        self.assertEqual(again.cycle_total(t), call_counter.SOFT_LIMIT)
+
+    def test_fail_safe_persist_failure_still_soft_limit_and_restart_safe(self):
+        self.path.write_text("{not json")
+        t = zt(2026, 11, 11)
+        with mock.patch.object(CallCounter, "_persist", return_value=False):
+            with self.assertLogs(level="ERROR"):
+                c = self._fixed()
         self.assertFalse(self.path.exists())
+        self.assertEqual(c.cycle_total(t), call_counter.SOFT_LIMIT)
+        # restart before any persist: .corrupt sibling must not mean 0
+        with self.assertLogs(level="ERROR"):
+            again = self._fixed()
+        self.assertEqual(again.cycle_total(t), call_counter.SOFT_LIMIT)
+        self.assertEqual(again.state(t), BRAKE)
+
+    def test_fresh_start_without_corrupt_sibling_is_zero(self):
+        self.assertEqual(self._fixed().cycle_total(zt(2026, 11, 11)), 0)
+
+    def test_reseed_clears_corrupt_sibling_condition(self):
+        self.path.write_text("{not json")
+        t = zt(2026, 11, 11)
+        with mock.patch.object(CallCounter, "_persist", return_value=False):
+            with self.assertLogs(level="ERROR"):
+                c = self._fixed()
+        self.assertFalse(self.path.exists())
+        self.assertEqual(c.seed(100, now=t, force=True), 100)
+        self.assertTrue(self.path.with_name(self.path.name + ".corrupt").exists())
+        with self.assertNoLogs(level="ERROR"):
+            again = self._fixed()
+        self.assertEqual(again.cycle_total(t), 100)
 
     def test_wrong_version_fails_safe_at_soft_limit(self):
         self.path.write_text(json.dumps({"version": 99}))

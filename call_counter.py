@@ -184,7 +184,12 @@ class CallCounter:
         try:
             raw = self.path.read_text(encoding="utf-8")
         except FileNotFoundError:
-            return  # first start: nothing used yet
+            corrupt = self.path.with_name(self.path.name + ".corrupt")
+            if corrupt.exists():
+                # An earlier fail-safe moved the bad file aside but its state
+                # was never persisted: a missing file is NOT a clean start.
+                self._fail_safe("missing while a .corrupt copy exists", move=False)
+            return  # otherwise first start: nothing used yet
         except OSError as exc:
             self._fail_safe(f"unreadable ({exc.__class__.__name__})")
             return
@@ -244,21 +249,32 @@ class CallCounter:
         self._days = days
         self._fetch_state = fetch_state
 
-    def _fail_safe(self, why: str) -> None:
+    def _fail_safe(self, why: str, move: bool = True) -> None:
         """Unusable counter file: keep it aside and start conservatively.
 
         Never start from 0 (that would grant a fresh budget); start at the soft
         limit so the brake is active until the owner re-seeds the counter.
+        The fail-safe state is persisted at once so a restart before the first
+        regular write cannot see "no file" and start at 0. If that write fails,
+        the memory state stays at the soft limit, and the surviving `.corrupt`
+        sibling makes the next start fail safe again (see `_load`).
         """
         self._reset_state()
         corrupt = self.path.with_name(self.path.name + ".corrupt")
-        try:
-            os.replace(self.path, corrupt)
-            kept = f"kept as {corrupt.name}"
-        except OSError:
-            kept = "could not be moved aside"
+        moved = True
+        kept = f"kept as {corrupt.name}"
+        if move:
+            try:
+                os.replace(self.path, corrupt)
+            except OSError:
+                moved = False
+                kept = "could not be moved aside"
         self._cycle_start = cycle_start_for(self._today(None), self.billing_day)
         self._cycle_total = self.soft_limit
+        if moved:
+            # Do not overwrite a bad file that could not be moved aside: it
+            # keeps triggering the fail-safe on the next start anyway.
+            self._persist()
         logging.error(
             f"Call counter file {why} ({kept}); starting at the soft limit "
             f"{self.soft_limit}/{self.hard_limit} (brake). Re-seed with "
