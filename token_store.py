@@ -10,6 +10,11 @@ Token file format (JSON, version 1, mode 0600):
     obtained_at (UTC epoch), granted_at (UTC epoch of browser consent),
     site_id.
 
+Every SolarEdge HTTP attempt (data requests, the 401 re-try and token refresh
+POSTs) is counted here, before it is sent, when a CallCounter is attached.
+While the call budget is stopped, QuotaBlocked is raised instead of sending
+anything; it is never mapped to LoginRequired or TransientAuthError.
+
 Secrets (tokens, client secret, response bodies) are never logged.
 """
 
@@ -27,6 +32,8 @@ from typing import Optional, Union
 from zoneinfo import ZoneInfo
 
 import requests
+
+from call_counter import QuotaBlocked, endpoint_for_url  # noqa: F401
 
 TOKEN_URL = "https://monitoringapi.solaredge.com/v2/oauth2/token"
 REFRESH_MARGIN_SECONDS = 300
@@ -127,14 +134,21 @@ class TokenStore:
         client_id: str,
         client_secret: str,
         env_file: Optional[Union[str, Path]] = None,
+        counter=None,
     ):
         self.token_file = Path(token_file)
         self.client_id = client_id
         self.client_secret = client_secret
         self.env_file = Path(env_file) if env_file else None
+        self.counter = counter
         # Plain session, deliberately no retry adapter (D-05)
         self.session = requests.Session()
         self._last_grant_warning_date = None
+
+    def _count(self, endpoint: str) -> None:
+        """Count one outgoing call; QuotaBlocked propagates when not allowed."""
+        if self.counter is not None:
+            self.counter.acquire(endpoint)
 
     @property
     def lock_file(self) -> Path:
@@ -232,6 +246,7 @@ class TokenStore:
         if not self.client_id or not self.client_secret:
             raise LoginRequired("client credentials missing")
 
+        self._count("token")  # outside the try: QuotaBlocked must not become TransientAuthError
         reason = None
         body = None
         try:
@@ -302,15 +317,18 @@ class TokenStore:
     # ---- authorized requests ----
 
     def authorized_request(self, method: str, url: str, **kwargs) -> requests.Response:
+        endpoint = endpoint_for_url(url)
         token = self.get_access_token()
         headers = dict(kwargs.pop("headers", {}) or {})
         kwargs.setdefault("timeout", HTTP_TIMEOUT)
         headers["Authorization"] = f"Bearer {token}"
+        self._count(endpoint)
         resp = self.session.request(method, url, headers=headers, **kwargs)
         if resp.status_code == 401:
             logging.warning("API returned 401, refreshing token once")
             token = self.force_refresh(token)
             retry_headers = {**headers, "Authorization": f"Bearer {token}"}
+            self._count(endpoint)
             resp = self.session.request(method, url, headers=retry_headers, **kwargs)
             if resp.status_code == 401:
                 raise LoginRequired("API rejected token after refresh")
