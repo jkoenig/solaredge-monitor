@@ -78,6 +78,28 @@ class SeedTests(unittest.TestCase):
         self.assertEqual(run(["--count", "1", "--margin", "-1", "--file", self.file])[0], 2)
         self.assertFalse(os.path.exists(self.file))
 
+    def test_invalid_billing_day_rejected(self):
+        for day in ("0", "32", "-1"):
+            code, _ = run(["--count", "1", "--billing-day", day, "--file", self.file])
+            self.assertEqual(code, 2)
+        with mock.patch.dict(os.environ, {"SOLAREDGE_BILLING_DAY": "40"}):
+            self.assertEqual(run(["--count", "1", "--file", self.file])[0], 2)
+        self.assertFalse(os.path.exists(self.file))
+
+    def test_persist_failure_exits_nonzero(self):
+        with mock.patch("call_counter.os.replace", side_effect=OSError("ro")):
+            code, out = run(["--count", "5", "--file", self.file])
+        self.assertEqual(code, 1)
+        self.assertNotIn("Call counter:", out)
+
+    def test_force_lowering_clears_stopped_flag(self):
+        c = CallCounter(self.file)
+        c.mark_exhausted()
+        self.assertEqual(CallCounter(self.file).state().__str__(), "stopped")
+        code, _ = run(["--count", "100", "--margin", "0", "--force", "--file", self.file])
+        self.assertEqual(code, 0)
+        self.assertEqual(CallCounter(self.file).state(), "ok")
+
     def test_file_mode_and_no_ids(self):
         run(["--from-journal", "--file", self.file], "\n".join(JOURNAL))
         self.assertEqual(stat.S_IMODE(os.stat(self.file).st_mode), 0o600)

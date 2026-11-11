@@ -427,9 +427,17 @@ class CallCounter:
         return self._persist()
 
     def seed(self, total: int, now: Optional[datetime] = None, force: bool = False) -> int:
-        """Set the cycle total (raise only unless force). Used by the seed script."""
+        """Set the cycle total (raise only unless force). Used by the seed script.
+
+        Raises OSError if the counter file could not be written.
+        """
         today = self._roll(now)
         self._cycle_total = total if force else max(self._cycle_total, total)
+        if force:
+            self._stopped = self._cycle_total >= self.hard_limit
+            self._stop_logged = self._stopped
+            self._brake_logged = self._cycle_total >= self.soft_limit
         self._days[today.isoformat()]["cycle_after"] = self._cycle_total
-        self._persist()
+        if not self._persist():
+            raise OSError("call counter file could not be written")
         return self._cycle_total

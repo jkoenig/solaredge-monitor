@@ -82,9 +82,17 @@ def main(argv: Optional[list] = None) -> int:
             print("Error: SOLAREDGE_BILLING_DAY must be an integer", file=sys.stderr)
             return 2
 
+    if not 1 <= billing_day <= 31:
+        print("Error: billing day must be between 1 and 31", file=sys.stderr)
+        return 2
+
     total = base + args.margin
     counter = CallCounter(path, billing_day=billing_day)
-    new = counter.seed(total, force=args.force)
+    try:
+        new = counter.seed(total, force=args.force)
+    except OSError as exc:
+        print(f"Error: counter file {path} was NOT written ({exc})", file=sys.stderr)
+        return 1
     print(f"Call counter: {new}/{HARD_LIMIT} in the current cycle (next reset {counter.next_reset()})")
     if new > total:
         print(f"Note: existing higher value kept (requested {total}); use --force to lower it.")
