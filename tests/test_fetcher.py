@@ -1,5 +1,6 @@
 """Tests for fetcher.py: fetch_round orchestration, today-bar patch, build_cycle."""
 
+import json
 import sys
 import unittest
 from datetime import date, datetime, timedelta
@@ -15,7 +16,9 @@ from fetcher import (  # noqa: E402
     DataCache,
     RoundResult,
     build_cycle,
+    export_fetch_state,
     fetch_round,
+    restore_fetch_state,
     patch_history_today,
 )
 from models import BatteryData, EnergyDetails, EnergyHistory, ForecastData  # noqa: E402
@@ -302,6 +305,138 @@ class BuildCycleTests(unittest.TestCase):
         cache.energy = None
         names = [c[2] for c in build_cycle(self.SCREENS, cache)]
         self.assertEqual(names, ["Hausakku", "Verlauf", "Prognose"])
+
+
+class QuotaAndStateTests(unittest.TestCase):
+    def test_stopped_makes_no_calls(self):
+        api = make_api()
+        res = fetch_round(api, FetchPlan(), DataCache(), at(9), True, True, quota_mode="stopped")
+        self.assertEqual(method_calls(api), [])
+        self.assertEqual(res, RoundResult(overview_ok=False, overview_attempted=False))
+
+    def test_night_slot_only_storage(self):
+        api = make_api()
+        res = fetch_round(api, FetchPlan(), DataCache(), at(23), True, True)
+        self.assertEqual([c[0] for c in method_calls(api)], ["get_battery_telemetry"])
+        self.assertFalse(res.overview_attempted)
+
+    def test_daytime_overview_failure_is_attempted(self):
+        api = make_api(get_overview=None)
+        res = fetch_round(api, FetchPlan(), DataCache(), at(9), False, True)
+        self.assertTrue(res.overview_attempted)
+        self.assertFalse(res.overview_ok)
+
+    def test_quota_mode_passed_to_due(self):
+        plan = mock.MagicMock()
+        plan.due.return_value = set()
+        fetch_round(make_api(), plan, DataCache(), at(9), True, False, quota_mode="brake")
+        self.assertEqual(plan.due.call_count, 2)
+        for c in plan.due.call_args_list:
+            self.assertEqual(c[0][3], "brake")
+
+    def _round_trip(self):
+        plan, cache = FetchPlan(), DataCache()
+        fetch_round(make_api(), plan, cache, at(7), True, True)
+        return plan, cache
+
+    def test_export_restore_roundtrip(self):
+        plan, cache = self._round_trip()
+        data = json.loads(json.dumps(export_fetch_state(plan, cache)))
+        self.assertTrue({"plan", "history", "temperature"} <= set(data))
+        plan2, cache2 = FetchPlan(), DataCache()
+        restore_fetch_state(plan2, cache2, data, at(8))
+        self.assertEqual(cache2.history.dates, cache.history.dates)
+        self.assertEqual(cache2.history.production, cache.history.production)
+        self.assertEqual(cache2.history.consumption, cache.history.consumption)
+        self.assertEqual(cache2.temperature, 18.5)
+        due = plan2.due(at(8), True, True)
+        self.assertNotIn(fs.HISTORY, due)
+        self.assertNotIn(fs.TEMPERATURE, due)
+
+    def test_restore_missing_history_drops_succeeded_slot(self):
+        plan, cache = self._round_trip()
+        data = export_fetch_state(plan, cache)
+        data["history"] = None
+        plan2, cache2 = FetchPlan(), DataCache()
+        restore_fetch_state(plan2, cache2, data, at(8))
+        self.assertIsNone(cache2.history)
+        self.assertIn(fs.HISTORY, plan2.due(at(8), True, True))
+
+    def test_restore_garbage_never_raises(self):
+        for data in ({}, None, "x", {"history": 3, "temperature": True, "plan": [], "energy": 5},
+                     {"history": {"dates": ["a"], "production": ["x"], "consumption": [1]}}):
+            plan, cache = FetchPlan(), DataCache()
+            restore_fetch_state(plan, cache, data, at(8))
+            self.assertIsNone(cache.history)
+            self.assertIsNone(cache.temperature)
+            self.assertIsNone(cache.energy)
+
+    def test_stale_energy_at_night_does_not_patch_history(self):
+        cache = DataCache(energy=energy(), energy_date=date(2026, 11, 5),
+                          history=history(date(2026, 11, 5)))
+        before = cache.history
+        api = make_api()
+        fetch_round(api, FetchPlan(), cache, at(2, day=6), True, True)
+        self.assertEqual([c[0] for c in method_calls(api)], ["get_battery_telemetry"])
+        self.assertIs(cache.history, before)
+        self.assertEqual(cache.history.dates[-1], "2026-11-05")
+        self.assertEqual(cache.energy.production, 10.0)
+
+    def test_same_day_overview_patches_history(self):
+        cache = DataCache(history=history(date(2026, 11, 5)))
+        fetch_round(make_api(get_overview=energy(7.0, 6.0)), FetchPlan(), cache,
+                    at(9, day=6), False, True)
+        self.assertEqual(cache.energy_date, date(2026, 11, 6))
+        self.assertEqual(cache.history.dates[-1], "2026-11-06")
+        self.assertEqual(cache.history.production[-1], 7.0)
+        self.assertEqual(cache.history.consumption[-1], 6.0)
+
+    def test_later_round_without_overview_still_patches(self):
+        cache = DataCache(energy=energy(7.0, 6.0), energy_date=date(2026, 11, 6),
+                          history=history(date(2026, 11, 5)))
+        plan = mock.MagicMock()
+        plan.due.return_value = {fs.STORAGE}
+        fetch_round(make_api(), plan, cache, at(14, day=6), True, True, quota_mode="brake")
+        self.assertEqual(cache.history.dates[-1], "2026-11-06")
+        self.assertEqual(cache.history.production[-1], 7.0)
+
+    def test_forecast_actual_zero_for_yesterday_energy(self):
+        cache = DataCache(energy=energy(), energy_date=date(2026, 11, 5))
+        fc = mock.MagicMock()
+        fc.get_forecast.return_value = ForecastData(1.0, 2.0)
+        plan = mock.MagicMock()
+        plan.due.return_value = {fs.STORAGE}
+        fetch_round(make_api(), plan, cache, at(2, day=6), True, True, forecast_api=fc)
+        self.assertEqual(cache.forecast.actual_production, 0.0)
+
+    def test_energy_roundtrip_and_stale_restore(self):
+        cache = DataCache(energy=energy(), energy_date=date(2026, 11, 5),
+                          history=history(date(2026, 11, 5)))
+        data = json.loads(json.dumps(export_fetch_state(FetchPlan(), cache)))
+        self.assertEqual(data["energy"]["date"], "2026-11-05")
+        self.assertEqual(len([k for k in data["energy"] if k != "date"]), 8)
+        plan2, cache2 = FetchPlan(), DataCache()
+        restore_fetch_state(plan2, cache2, data, at(2, day=6))
+        self.assertEqual(cache2.energy.production, 10.0)
+        self.assertEqual(cache2.energy.purchased, 2.0)
+        self.assertEqual(cache2.energy_date, date(2026, 11, 5))
+        fetch_round(make_api(), plan2, cache2, at(2, day=6), True, True)
+        self.assertEqual(cache2.history.dates[-1], "2026-11-05")
+
+    def test_restore_bad_energy(self):
+        cache = DataCache(energy=energy(), energy_date=date(2026, 11, 5),
+                          history=history(date(2026, 11, 5)), temperature=18.0)
+        good = export_fetch_state(FetchPlan(), cache)
+        for mutate in (lambda e: e.pop("to_storage"), lambda e: e.update(feed_in="x"),
+                       lambda e: e.update(feed_in=True), lambda e: e.update(date="nope")):
+            data = json.loads(json.dumps(good))
+            mutate(data["energy"])
+            c2 = DataCache()
+            restore_fetch_state(FetchPlan(), c2, data, at(8))
+            self.assertIsNone(c2.energy)
+            self.assertIsNone(c2.energy_date)
+            self.assertIsNotNone(c2.history)
+            self.assertEqual(c2.temperature, 18.0)
 
 
 if __name__ == "__main__":
