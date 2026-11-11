@@ -1,25 +1,27 @@
 #!/usr/bin/env python3
-"""One-off seed of the SolarEdge call counter (D-15).
+"""One-off seed of the SolarEdge call counter.
 
 Sets the current billing cycle's counter to the real usage so far, either from
 an explicit count or by counting call lines in the service journal. Only a
 count is written, never ids. An existing higher count is never lowered unless
 --force is given.
 
-Deploy procedure (executed in Phase 14, on raspberrypi.local, as user pi):
+Procedure (on the Pi, as the service user, never with sudo: a root-owned lock file stops the service from starting):
   1. Stop the service first. The running service keeps the counter in memory
      and would overwrite the file:
        sudo systemctl stop solaredge-monitor
   2. Seed from the journal since the cycle start, plus a margin for the manual
      probe and preview calls made outside the service:
        journalctl -u solaredge-monitor --since "YYYY-MM-DD 00:00" -o cat | venv/bin/python3 scripts/seed_call_counter.py --from-journal --margin 20
+     Use the first day the V2 service ran, or the start of the current billing
+     cycle if that is later.
   3. Start the service again:
        sudo systemctl start solaredge-monitor
 
 Or with a known number: scripts/seed_call_counter.py --count 300 --margin 20
 
-Counting failed and timed-out attempts is deliberately conservative (D-13:
-count wherever the request may have been sent).
+Counting failed and timed-out attempts is deliberately conservative (count
+wherever the request may have been sent).
 """
 from __future__ import annotations
 

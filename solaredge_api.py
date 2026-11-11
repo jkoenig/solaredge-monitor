@@ -266,8 +266,8 @@ class SolarEdgeAPI:
                 logging.warning("Storage telemetry has no stateOfEnergy value")
                 return None
             # stateOfEnergy (unit PERCENTAGE) arrives as a 0..1 fraction on the
-            # live API (fraction between 0 and 1), so scale
-            # to %. A value above 1.0 can only be a percent already: use as-is.
+            # live API even though the unit says PERCENTAGE, so scale to %.
+            # A value above 1.0 can only be a percent already: use as-is.
             # (Ambiguity: a raw 1.0 is read as 100 %, not 1 %.)
             pcts = [v * 100.0 if v <= 1.0 else v for v in socs]
             soc_pct = sum(pcts) / len(pcts)
