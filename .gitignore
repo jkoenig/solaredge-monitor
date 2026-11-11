@@ -8,6 +8,8 @@
 .tokens.json.*
 .battery.json
 .battery.json.*
+.calls.json
+.calls.json.*
 
 # Python
 __pycache__/
