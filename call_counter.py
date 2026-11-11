@@ -391,7 +391,10 @@ class CallCounter:
                 "SolarEdge reports monthly credit limit reached; "
                 f"stopping API calls until {self._next_reset(today)}"
             )
-        self._persist()
+        if not self._persist():
+            logging.error(
+                "Could not persist the stopped flag; the next start may send one more call"
+            )
 
     def pop_day_summaries(self, now: Optional[datetime] = None) -> List[str]:
         """Return the one-line summary of yesterday, once."""

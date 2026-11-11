@@ -158,6 +158,14 @@ class PersistenceTests(CounterTestBase):
         self.assertEqual(data["cycle_start"], "2026-11-05")
         self.assertEqual(self._fixed().fetch_state(), {"a": 1})
 
+    def test_mark_exhausted_persist_failure_is_logged(self):
+        c = self._fixed()
+        with mock.patch("call_counter.os.replace", side_effect=OSError("boom")):
+            with self.assertLogs(level="ERROR") as cm:
+                c.mark_exhausted(zt(2026, 11, 11))
+        self.assertTrue(any("stopped flag" in m for m in cm.output))
+        self.assertEqual(c.state(zt(2026, 11, 11)), STOPPED)
+
     def test_missing_file_no_warning(self):
         with self.assertNoLogs(level="WARNING"):
             c = self.make()

@@ -32,6 +32,23 @@ BASE_URL = "https://monitoringapi.solaredge.com/v2"
 IDLE_THRESHOLD_W = 50
 MONTHLY_LIMIT_DETAIL = "Monthly credit limit reached."
 
+
+def _is_monthly_limit(err_body) -> bool:
+    """True if a 429 body says the MONTHLY credit pool is exhausted.
+
+    Tolerant to case/punctuation/wording changes, but always requires both
+    "monthly" and "limit" so a per-minute rate-limit 429 never matches (D-11).
+    """
+    if not isinstance(err_body, dict):
+        return False
+    for key in ("detail", "message"):
+        text = err_body.get(key)
+        if isinstance(text, str):
+            low = text.lower()
+            if "monthly" in low and "limit" in low:
+                return True
+    return False
+
 _UNIT_FACTORS_TO_KWH = {
     "WH": 0.001,
     "KWH": 1.0,
@@ -149,7 +166,7 @@ class SolarEdgeAPI:
                     err_body = resp.json()
                 except ValueError:
                     err_body = None
-                if isinstance(err_body, dict) and err_body.get("detail") == MONTHLY_LIMIT_DETAIL:
+                if _is_monthly_limit(err_body):
                     counter = getattr(self.token_store, "counter", None)
                     if counter is not None:
                         counter.mark_exhausted()

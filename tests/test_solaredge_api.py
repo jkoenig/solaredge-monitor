@@ -585,6 +585,23 @@ class QuotaTests(unittest.TestCase):
         store.counter.mark_exhausted.assert_called_once_with()
         self.assertIn("monthly credit limit", "\n".join(cm.output))
 
+    def test_monthly_429_wording_variants_mark_exhausted(self):
+        for body in ({"detail": "monthly CREDIT limit reached"},
+                     {"message": "Monthly limit exceeded."}):
+            api, store, _ = make_api([fake_response(429, body)])
+            with self.assertLogs(level="ERROR"):
+                api.get_overview(retry=False)
+            store.counter.mark_exhausted.assert_called_once()
+
+    def test_per_minute_429_wordings_do_not_mark_exhausted(self):
+        for body in ({"detail": "Rate limit exceeded"},
+                     {"message": "Too many requests per minute, limit reached"},
+                     {"detail": ["Monthly"]}):
+            api, store, _ = make_api([fake_response(429, body)])
+            with self.assertLogs(level="ERROR"):
+                api.get_overview(retry=False)
+            store.counter.mark_exhausted.assert_not_called()
+
     def test_per_minute_429_does_not_mark_exhausted(self):
         api, store, _ = make_api([fake_response(429, {"message": "API rate limit exceeded"})])
         with self.assertLogs(level="ERROR"):
