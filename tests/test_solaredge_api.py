@@ -567,6 +567,17 @@ class QuotaTests(unittest.TestCase):
         self.assertIn("/sites/{site_id}/overview", out)
         self.assertNotIn(FAKE_SITE_ID, out)
 
+    def test_blocked_sets_quota_blocked_flag_failure_does_not(self):
+        api, _, _ = make_api([QuotaBlocked("stopped")])
+        self.assertFalse(api.quota_blocked)
+        with self.assertLogs(level="WARNING"):
+            api.get_overview()
+        self.assertTrue(api.quota_blocked)
+        api2, _, _ = make_api([fake_response(500)])
+        with self.assertLogs(level="ERROR"):
+            api2.get_overview(retry=False)
+        self.assertFalse(api2.quota_blocked)
+
     def test_monthly_429_marks_exhausted(self):
         api, store, _ = make_api([fake_response(429, {"detail": "Monthly credit limit reached."})])
         with self.assertLogs(level="ERROR") as cm:

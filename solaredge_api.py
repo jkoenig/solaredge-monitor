@@ -84,6 +84,9 @@ class SolarEdgeAPI:
         self.token_store = token_store
         self._sleep = sleep
         self._now_fn = now_fn or (lambda: datetime.now(SITE_TZ))
+        # Sticky: set when the call budget blocked a request; the caller
+        # (fetcher) resets it before each job so it can tell "blocked" from "failed".
+        self.quota_blocked = False
 
     def _now(self) -> datetime:
         return self._now_fn()
@@ -115,6 +118,7 @@ class SolarEdgeAPI:
                 logging.warning(f"API auth refresh deferred: {path_template}")
                 return None
             except QuotaBlocked as e:
+                self.quota_blocked = True
                 logging.warning(f"API call skipped, call budget blocked ({e.reason}): {path_template}")
                 return None
             except requests.exceptions.RequestException as e:

@@ -134,6 +134,25 @@ class FetchRoundTests(unittest.TestCase):
         for job in (fs.OVERVIEW, fs.STORAGE, fs.HISTORY, fs.TEMPERATURE):
             plan.record.assert_any_call(job, at(7), False)
 
+    def test_quota_blocked_jobs_are_not_recorded_as_failures(self):
+        api = make_api(get_overview=None, get_energy_history=None)
+
+        def blocked(*a, **k):
+            api.quota_blocked = True
+            return None
+
+        api.get_overview.side_effect = blocked
+        api.get_energy_history.side_effect = blocked
+        plan = mock.MagicMock()
+        plan.due.return_value = {fs.OVERVIEW, fs.HISTORY, fs.TEMPERATURE}
+        plan.in_backoff = False
+        fetch_round(api, plan, DataCache(), at(7), False, True)
+        recorded = [c.args[0] for c in plan.record.call_args_list]
+        self.assertNotIn(fs.OVERVIEW, recorded)
+        self.assertNotIn(fs.HISTORY, recorded)
+        # temperature ran after a reset of the flag and succeeded
+        plan.record.assert_any_call(fs.TEMPERATURE, at(7), True)
+
     def test_success_records_true_and_updates_cache(self):
         api = make_api()
         plan = mock.MagicMock()

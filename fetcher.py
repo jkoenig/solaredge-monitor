@@ -71,6 +71,14 @@ def patch_history_today(
     )
 
 
+def _record(api, plan, job, now, ok: bool) -> None:
+    """Record a job outcome, unless the call budget blocked it (no call was sent)."""
+    if not ok and getattr(api, "quota_blocked", False) is True:
+        logging.debug("Fetch job %s blocked by call budget; not recorded as failure", job)
+        return
+    plan.record(job, now, ok)
+
+
 def fetch_round(
     api,
     plan,
@@ -101,16 +109,18 @@ def fetch_round(
     overview_ok = False
 
     if fs.OVERVIEW in jobs:
+        api.quota_blocked = False
         energy = api.get_overview(retry=not plan.in_backoff)
-        plan.record(fs.OVERVIEW, now, energy is not None)
+        _record(api, plan, fs.OVERVIEW, now, energy is not None)
         if energy is not None:
             cache.energy = energy
             cache.energy_date = now.date()
             overview_ok = True
 
     if fs.TEMPERATURE in jobs:
+        api.quota_blocked = False
         temp = api.get_storage_temperature()
-        plan.record(fs.TEMPERATURE, now, temp is not None)
+        _record(api, plan, fs.TEMPERATURE, now, temp is not None)
         if temp is not None:
             cache.temperature = temp
             if fs.STORAGE not in jobs and cache.battery is not None:
@@ -118,14 +128,16 @@ def fetch_round(
 
     if fs.STORAGE in jobs:
         internal_temp = cache.temperature if cache.temperature is not None else 0.0
+        api.quota_blocked = False
         battery = api.get_battery_telemetry(internal_temp=internal_temp)
-        plan.record(fs.STORAGE, now, battery is not None)
+        _record(api, plan, fs.STORAGE, now, battery is not None)
         if battery is not None:
             cache.battery = battery
 
     if fs.HISTORY in jobs:
+        api.quota_blocked = False
         history = api.get_energy_history()
-        plan.record(fs.HISTORY, now, history is not None)
+        _record(api, plan, fs.HISTORY, now, history is not None)
         if history is not None:
             cache.history = history
 
