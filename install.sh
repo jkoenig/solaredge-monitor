@@ -94,7 +94,7 @@ fi
 
 # [6/6] Install systemd service
 echo "[6/6] Installing systemd service..."
-sudo cp solaredge-monitor.service /etc/systemd/system/
+sudo install -m 644 -o root -g root solaredge-monitor.service /etc/systemd/system/solaredge-monitor.service
 sudo systemctl daemon-reload
 sudo systemctl enable solaredge-monitor
 echo "  ✓ Service installed and enabled"

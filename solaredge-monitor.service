@@ -1,6 +1,7 @@
 [Unit]
 Description=SolarEdge Off-Grid Monitor
-After=network.target
+Wants=network-online.target systemd-time-wait-sync.service
+After=network-online.target time-sync.target
 
 [Service]
 Type=simple
