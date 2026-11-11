@@ -6,7 +6,11 @@ Used by the main polling loop after consecutive API failures.
 
 Also provides the "Login noetig" screen (D-06): shown when no usable OAuth token
 exists. It is rendered directly by main.py and is not part of get_screens().
+
+Screens in this module: error ("Fehler"), "Login nötig", "Kontingent aufgebraucht".
 """
+
+from datetime import date
 
 from PIL import Image, ImageDraw
 from rendering.fonts import load_font
@@ -18,6 +22,7 @@ MARGIN = 5
 
 LOGIN_HEADLINE = "Login nötig"
 LOGIN_HINT = "Mac: login-Skript starten"
+QUOTA_HEADLINE = "Kontingent aufgebraucht"
 
 
 def render_error_screen(message: str = "API nicht erreichbar") -> Image.Image:
@@ -43,6 +48,24 @@ def render_login_required_screen() -> Image.Image:
         PIL Image in mode '1', size 1000x488
     """
     return _render_headline_message(LOGIN_HEADLINE, LOGIN_HINT)
+
+
+def render_quota_exhausted_screen(reset_date: date) -> Image.Image:
+    """Render the "Kontingent aufgebraucht" info screen (D-10).
+
+    Shown as the last rotation entry only while the call counter is stopped
+    (hard stop at 1,800 or SolarEdge 429 "Monthly credit limit reached.").
+    Not part of get_screens().
+
+    Args:
+        reset_date: First day with fresh quota (computed by the caller).
+
+    Returns:
+        PIL Image in mode '1', size 1000x488
+    """
+    return _render_headline_message(
+        QUOTA_HEADLINE, f"Neue Werte ab {reset_date.day}.{reset_date.month}."
+    )
 
 
 def _render_headline_message(headline: str, message: str) -> Image.Image:
