@@ -2,14 +2,27 @@
 
 import time
 import unittest
+from datetime import date
+from pathlib import Path
 from unittest import mock
 
 import main
 from fetcher import DataCache, RoundResult
+from call_counter import QuotaBlocked
+from screens.error import render_quota_exhausted_screen
 from token_store import LoginRequired
 
 
-def make_state(due=("overview",), next_poll_offset=1000.0, energy=True, has_battery=False):
+def make_counter(mode="ok", summaries=()):
+    c = mock.MagicMock()
+    c.state.return_value = mode
+    c.next_reset.return_value = date(2026, 12, 5)
+    c.pop_day_summaries.return_value = list(summaries)
+    return c
+
+
+def make_state(due=("overview",), next_poll_offset=1000.0, energy=True, has_battery=False,
+               counter=None):
     cfg = mock.MagicMock()
     cfg.battery_cache_file = "battery_cache.json"
     cache = DataCache()
@@ -31,6 +44,7 @@ def make_state(due=("overview",), next_poll_offset=1000.0, energy=True, has_batt
         site_id="site",
         next_poll=time.monotonic() + next_poll_offset,
         poll_interval_seconds=1800,
+        counter=counter,
     )
 
 
@@ -41,6 +55,7 @@ class RunIterationTest(unittest.TestCase):
             "fetch": mock.patch.object(main, "fetch_round"),
             "save": mock.patch.object(main, "save_battery_cache"),
             "err": mock.patch.object(main, "render_error_screen", return_value="img"),
+            "export": mock.patch.object(main, "export_fetch_state", return_value={"x": 1}),
         }
         self.m = {k: p.start() for k, p in patches.items()}
         for p in patches.values():
@@ -108,7 +123,7 @@ class RunIterationTest(unittest.TestCase):
             self.run_it(state)
             state.next_poll = time.monotonic() - 1
         self.display.render.assert_called_once_with("img", "error")
-        # sleep/wake: display cleared, main resets the flag; next failed poll redraws
+        # manual flag reset (e.g. after login resume); next failed poll redraws
         state.error_screen_shown = False
         self.run_it(state)
         self.assertEqual(state.consecutive_failures, 4)
@@ -161,6 +176,99 @@ class RunIterationTest(unittest.TestCase):
         with self.assertRaises(LoginRequired):
             self.run_it(state)
         self.m["fetch"].assert_not_called()
+
+    def test_stopped_appends_info_screen_no_calls(self):
+        counter = make_counter("stopped")
+        state = make_state(due=(), next_poll_offset=-1.0, counter=counter)
+        self.assertTrue(self.run_it(state))
+        self.assertEqual(state.plan.due.call_args[0][3], "stopped")
+        state.token_store.get_access_token.assert_not_called()
+        self.m["fetch"].assert_not_called()
+        cycle = self.m["cycle"].call_args[0][1]
+        self.assertEqual([n for _, _, n in cycle], ["Produktion", "Kontingent"])
+        self.assertIs(cycle[-1][0], render_quota_exhausted_screen)
+        self.assertEqual(cycle[-1][1], date(2026, 12, 5))
+
+    def test_stopped_empty_cache_info_screen_alone(self):
+        state = make_state(energy=False, due=(), counter=make_counter("stopped"))
+        self.assertTrue(self.run_it(state))
+        cycle = self.m["cycle"].call_args[0][1]
+        self.assertEqual(cycle, [(render_quota_exhausted_screen, date(2026, 12, 5), "Kontingent")])
+        self.display.render.assert_not_called()
+
+    def test_stopped_resets_failures(self):
+        state = make_state(counter=make_counter("stopped"))
+        state.consecutive_failures = 3
+        state.error_screen_shown = True
+        self.assertTrue(self.run_it(state))
+        self.assertEqual(state.consecutive_failures, 0)
+        self.assertFalse(state.error_screen_shown)
+        self.m["cycle"].assert_called_once()
+        self.display.render.assert_not_called()
+
+    def test_skipped_overview_rounds_never_fail(self):
+        state = make_state(next_poll_offset=-1.0, counter=make_counter("ok"))
+        self.m["fetch"].return_value = RoundResult(overview_ok=False, overview_attempted=False)
+        for _ in range(3):
+            self.run_it(state)
+            state.next_poll = time.monotonic() - 1
+        self.assertEqual(state.consecutive_failures, 0)
+        self.display.render.assert_not_called()
+
+    def test_brake_mode_passed_no_info_screen(self):
+        state = make_state(next_poll_offset=-1.0, counter=make_counter("brake"))
+        self.m["fetch"].return_value = RoundResult(overview_ok=True)
+        self.run_it(state)
+        self.assertEqual(state.plan.due.call_args[0][3], "brake")
+        self.assertEqual(self.m["fetch"].call_args[1]["quota_mode"], "brake")
+        cycle = self.m["cycle"].call_args[0][1]
+        self.assertNotIn("Kontingent", [n for _, _, n in cycle])
+
+    def test_quota_blocked_at_token_precheck(self):
+        state = make_state(next_poll_offset=-1.0, counter=make_counter("ok"))
+        state.token_store.get_access_token.side_effect = QuotaBlocked("stop")
+        self.m["fetch"].return_value = RoundResult(overview_ok=False)
+        with self.assertLogs(level="WARNING") as cm:
+            self.run_it(state)
+        self.assertTrue(any("Token refresh deferred" in r for r in cm.output))
+        self.m["fetch"].assert_called_once()
+
+    def test_fetch_state_saved_after_round(self):
+        counter = make_counter("ok")
+        state = make_state(next_poll_offset=-1.0, counter=counter)
+        self.m["fetch"].return_value = RoundResult(overview_ok=True)
+        self.run_it(state)
+        self.m["export"].assert_called_once_with(state.plan, state.cache)
+        counter.save_fetch_state.assert_called_once_with({"x": 1})
+
+    def test_429_during_round_stops_and_suppresses_error(self):
+        counter = make_counter("ok")
+        counter.state.side_effect = ["ok", "stopped", "stopped"]
+        state = make_state(next_poll_offset=-1.0, counter=counter)
+        state.consecutive_failures = 2
+        self.m["fetch"].return_value = RoundResult(overview_ok=False)
+        self.run_it(state)
+        self.assertEqual(state.consecutive_failures, 0)
+        self.display.render.assert_not_called()
+
+    def test_day_summary_logged_without_poll(self):
+        line = "Calls 2026-11-06: 3 (overview 2, token 1); cycle 3/1800"
+        state = make_state(counter=make_counter("ok", [line]))
+        with self.assertLogs(level="INFO") as cm:
+            self.run_it(state)
+        self.assertTrue(any(line in r for r in cm.output))
+
+    def test_night_restart_rotates_cached_energy(self):
+        state = make_state(due=(), counter=make_counter("ok"))
+        self.assertTrue(self.run_it(state))
+        cycle = self.m["cycle"].call_args[0][1]
+        self.assertEqual([n for _, _, n in cycle], ["Produktion"])
+
+    def test_main_source_clears_display_only_in_finally(self):
+        src = (Path(main.__file__)).read_text()
+        self.assertEqual(src.count("display.clear()"), 1)
+        self.assertNotIn("is_sleep_time", src)
+        self.assertNotIn("in_sleep", src)
 
 
 if __name__ == "__main__":

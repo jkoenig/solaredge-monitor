@@ -3,17 +3,21 @@
 SolarEdge Off-Grid Monitor - Main Entry Point
 
 Production loop that:
-- Reads V2 data through the OAuth token file (no API key). Interim cadence
-  (Phase 13 replaces it): overview every 30 minutes between 07:00 and 20:00
-  by default, storage hourly, history daily, temperature twice daily, and an
-  hourly backoff after 3 failed overview rounds
-- Cycles through the cached screens at 60 seconds each; between polls the
-  display keeps rotating on cached values without any API call
-- Sleeps outside the configured window (default 20:00 to 07:00)
+- Reads V2 data through the OAuth token file (no API key). Cadence: by day
+  (07:00 to 20:00 by default) overview every 30 minutes, storage hourly,
+  history daily, temperature twice; at night only the battery storage at
+  about 23:00/02:00/05:00
+- Cycles through the cached screens at 60 seconds each, day and night: the
+  display is never cleared at night and keeps rotating on cached values
+  between polls without any API call
+- Persistent call counter with soft brake at 1,500 and hard stop at 1,800
+  calls per billing cycle; while stopped, no calls are made and the
+  "Kontingent aufgebraucht" info screen is the last rotation entry
+- Logs one INFO line per day with the previous day's call totals
 - Shows error screen after 3 consecutive failed overview rounds
 - Shows "Login nötig" (and makes no calls) while the OAuth token is missing,
   corrupt or rejected; resumes automatically when the token file or .env changes
-- Clears display on graceful shutdown (SIGTERM/SIGINT)
+- Clears the display only on graceful shutdown (SIGTERM/SIGINT)
 
 Run with: python3 main.py
 
@@ -28,7 +32,6 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Optional
-from zoneinfo import ZoneInfo
 
 from pathlib import Path
 
@@ -49,15 +52,29 @@ from battery_cache import (
     load_battery_cache_entry,
     save_battery_cache,
 )
-from fetcher import DataCache, fetch_round, build_cycle
+from fetcher import (
+    DataCache,
+    fetch_round,
+    build_cycle,
+    export_fetch_state,
+    restore_fetch_state,
+)
+from call_counter import CallCounter, QuotaBlocked, HARD_LIMIT
 from forecast_api import ForecastSolarAPI
 from display import Display
 from screens import get_screens
-from screens.error import render_error_screen, render_login_required_screen
+from screens.error import (
+    render_error_screen,
+    render_login_required_screen,
+    render_quota_exhausted_screen,
+)
 from token_store import TokenStore, TokenFileWatcher, LoginRequired, TransientAuthError
 
 # Interval for checking token file / .env while login is needed (D-12)
 TOKEN_CHECK_INTERVAL_SECONDS = 60
+
+# Name of the quota info screen in the rotation
+QUOTA_SCREEN_NAME = "Kontingent"
 
 
 # Module-level state
@@ -70,35 +87,6 @@ def signal_handler(signum, frame):
     shutdown_flag = True
     signal_name = signal.Signals(signum).name
     logging.info(f"Received signal {signal_name}, initiating graceful shutdown")
-
-
-def is_sleep_time(config: Config) -> bool:
-    """
-    Check if current time is within configured sleep window.
-
-    Handles midnight-crossing sleep windows (e.g., 23:00 to 06:00).
-    Returns False if sleep_start == sleep_end (no sleep window).
-
-    Timezone: Europe/Berlin (hardcoded per research recommendation)
-    """
-    tz = ZoneInfo("Europe/Berlin")
-    now = datetime.now(tz)
-    hour = now.hour
-
-    start = config.sleep_start_hour
-    end = config.sleep_end_hour
-
-    # No sleep window if start == end
-    if start == end:
-        return False
-
-    # Handle midnight-crossing
-    if start <= end:
-        # Normal window: e.g., 0 to 6
-        return start <= hour < end
-    else:
-        # Crosses midnight: e.g., 23 to 6 means (hour >= 23) or (hour < 6)
-        return hour >= start or hour < end
 
 
 def interruptible_sleep(seconds: float) -> bool:
@@ -161,6 +149,7 @@ class LoopState:
     consecutive_failures: int = 0
     error_screen_shown: bool = False
     battery_checked_at: Any = None  # epoch of the last detection (None = unknown)
+    counter: Any = None
 
 
 def run_iteration(state: LoopState, display, now_mono: float) -> bool:
@@ -168,8 +157,15 @@ def run_iteration(state: LoopState, display, now_mono: float) -> bool:
 
     Returns True if a screen cycle ran. LoginRequired propagates.
     """
+    now_local = datetime.now(SITE_TZ)
+    if state.counter is not None:
+        for line in state.counter.pop_day_summaries(now_local):
+            logging.info(line)
+        mode = state.counter.state(now_local)
+    else:
+        mode = "ok"
+
     if now_mono >= state.next_poll:
-        now_local = datetime.now(SITE_TZ)
         if (
             state.battery_known
             and not state.has_battery
@@ -178,18 +174,19 @@ def run_iteration(state: LoopState, display, now_mono: float) -> bool:
             # A cached "no battery" is only trusted for 7 days (one /devices call).
             logging.info("Cached 'no battery' expired, will re-detect")
             state.battery_known = False
-        if state.plan.due(now_local, state.has_battery, state.battery_known):
+        if state.plan.due(now_local, state.has_battery, state.battery_known, mode):
             logging.info("Starting poll cycle")
             # Refresh token if close to expiry (keeps the 14-day chain alive)
             try:
                 state.token_store.get_access_token()
-            except TransientAuthError as e:
+            except (TransientAuthError, QuotaBlocked) as e:
                 logging.warning(f"Token refresh deferred: {e}")
             state.token_store.warn_if_grant_expiring()
 
             result = fetch_round(
                 state.api, state.plan, state.cache, now_local,
                 state.has_battery, state.battery_known, state.forecast_api,
+                quota_mode=mode,
             )
 
             if result.battery_detected is not None:
@@ -205,6 +202,11 @@ def run_iteration(state: LoopState, display, now_mono: float) -> bool:
                     )
                 logging.info(f"Battery detected: {detected}")
 
+            if state.counter is not None:
+                state.counter.save_fetch_state(export_fetch_state(state.plan, state.cache))
+                # A monthly 429 may have stopped the counter during this round (D-11)
+                mode = state.counter.state(now_local)
+
             if result.overview_ok:
                 state.consecutive_failures = 0
                 state.error_screen_shown = False
@@ -215,7 +217,7 @@ def run_iteration(state: LoopState, display, now_mono: float) -> bool:
                     f"Feed-in: {e.feed_in:.2f} kWh, "
                     f"Purchased: {e.purchased:.2f} kWh"
                 )
-            else:
+            elif result.overview_attempted and mode != "stopped":
                 state.consecutive_failures += 1
                 logging.warning(
                     f"Poll failed (consecutive failures: {state.consecutive_failures}/{MAX_FAILURES})"
@@ -234,10 +236,20 @@ def run_iteration(state: LoopState, display, now_mono: float) -> bool:
             logging.warning("Poll cycle took longer than interval, resetting schedule")
             state.next_poll = time.monotonic() + state.poll_interval_seconds
 
-    if state.consecutive_failures >= MAX_FAILURES:
+    stopped = mode == "stopped"
+    if stopped:
+        # The stop supersedes the API error screen (UI-SPEC)
+        state.consecutive_failures = 0
+        state.error_screen_shown = False
+    if state.consecutive_failures >= MAX_FAILURES and not stopped:
         return False
-    if state.cache.energy is not None:
-        run_screen_cycle(display, build_cycle(state.screens, state.cache))
+    cycle = build_cycle(state.screens, state.cache) if state.cache.energy is not None else []
+    if stopped:
+        cycle.append(
+            (render_quota_exhausted_screen, state.counter.next_reset(now_local), QUOTA_SCREEN_NAME)
+        )
+    if cycle:
+        run_screen_cycle(display, cycle)
         return True
     return False
 
@@ -293,9 +305,17 @@ def main():
     display = Display(debug_mode=config.debug)
     logging.info(f"Display initialized (backend: {display.backend})")
 
+    # Persistent call counter (soft brake / hard stop, daily summary)
+    counter = CallCounter(config.call_counter_file, billing_day=config.billing_day)
+    logging.info(
+        f"Call budget: {counter.cycle_total()}/{HARD_LIMIT} this cycle, "
+        f"state {counter.state()}, next reset {counter.next_reset()}"
+    )
+
     # Token store (API client is created lazily once a usable token exists)
     token_store = TokenStore(
-        config.token_file, config.client_id, config.client_secret, env_file=config.env_file
+        config.token_file, config.client_id, config.client_secret,
+        env_file=config.env_file, counter=counter,
     )
     watcher = TokenFileWatcher(config.token_file, config.env_file)
     state = None
@@ -319,7 +339,6 @@ def main():
 
     # Initialize polling state
     poll_interval_seconds = config.poll_interval * 60
-    in_sleep = False
     next_poll = time.monotonic()  # Poll immediately on startup
     login_needed = False
     login_screen_shown = False
@@ -339,25 +358,6 @@ def main():
 
     try:
         while not shutdown_flag:
-            # Check sleep window
-            if is_sleep_time(config):
-                if not in_sleep:
-                    logging.info("Entering sleep mode (display off until wake time)")
-                    display.clear()
-                    in_sleep = True
-                # Sleep for 60 seconds then check again
-                interruptible_sleep(60)
-                continue
-            else:
-                if in_sleep:
-                    logging.info("Waking from sleep mode")
-                    in_sleep = False
-                    login_screen_shown = False  # redraw after display.clear()
-                    next_poll = time.monotonic()  # Force immediate poll after wake
-                    if state is not None:
-                        state.next_poll = next_poll
-                        state.error_screen_shown = False  # redraw after display.clear()
-
             # Login-needed state: only the login screen, no calls (D-07..D-09)
             if login_needed:
                 if not login_screen_shown:
@@ -380,7 +380,7 @@ def main():
                             next_poll = time.monotonic()
                         except LoginRequired as e:
                             logging.warning(f"Login still required: {e.reason}")
-                        except TransientAuthError as e:
+                        except (TransientAuthError, QuotaBlocked) as e:
                             logging.warning(f"Token check deferred, resuming: {e}")
                             login_needed = False
                             login_screen_shown = False
@@ -399,12 +399,21 @@ def main():
                 api, has_battery, battery_known, screens, checked_at = init_site_clients(
                     config, token_store, token_site_id, has_forecast
                 )
+                plan = FetchPlan(
+                    night_start_hour=config.sleep_start_hour,
+                    night_end_hour=config.sleep_end_hour,
+                )
+                cache = DataCache()
+                restore_fetch_state(
+                    plan, cache, counter.fetch_state(), datetime.now(SITE_TZ)
+                )
                 new_state = LoopState(
                     config=config,
                     token_store=token_store,
                     api=api,
-                    plan=FetchPlan(),
-                    cache=DataCache(),
+                    plan=plan,
+                    cache=cache,
+                    counter=counter,
                     screens=screens,
                     has_battery=has_battery,
                     battery_known=battery_known,
