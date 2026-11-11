@@ -185,6 +185,22 @@ class PersistenceTests(CounterTestBase):
         self.assertEqual(self.make().fetch_state(), {})
 
 
+class LockTests(CounterTestBase):
+    def test_probe_does_not_hold_and_hold_blocks_second_fd(self):
+        import fcntl
+        self.assertTrue(call_counter.try_lock_counter(self.path))
+        self.assertTrue(call_counter.try_lock_counter(self.path))  # released again
+        self.assertTrue(call_counter.try_lock_counter(self.path, hold=True))
+        self.addCleanup(lambda: os.close(call_counter._HELD_LOCKS.pop(
+            str(call_counter.lock_path_for(self.path)))))
+        # idempotent within the process
+        self.assertTrue(call_counter.try_lock_counter(self.path, hold=True))
+        fd = os.open(str(call_counter.lock_path_for(self.path)), os.O_RDWR)
+        self.addCleanup(os.close, fd)
+        with self.assertRaises(OSError):
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
 class StateTests(CounterTestBase):
     def test_thresholds(self):
         t = zt(2026, 11, 11)

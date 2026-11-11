@@ -100,6 +100,17 @@ class SeedTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(CallCounter(self.file).state(), "ok")
 
+    def test_refuses_while_service_holds_lock(self):
+        import fcntl
+        fd = os.open(self.file + ".lock", os.O_RDWR | os.O_CREAT, 0o600)
+        self.addCleanup(os.close, fd)
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        code, _ = run(["--count", "5", "--file", self.file])
+        self.assertEqual(code, 3)
+        self.assertFalse(os.path.exists(self.file))
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        self.assertEqual(run(["--count", "5", "--file", self.file])[0], 0)
+
     def test_file_mode_and_no_ids(self):
         run(["--from-journal", "--file", self.file], "\n".join(JOURNAL))
         self.assertEqual(stat.S_IMODE(os.stat(self.file).st_mode), 0o600)

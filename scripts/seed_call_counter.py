@@ -32,7 +32,12 @@ from typing import Iterable, Optional
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from call_counter import DEFAULT_BILLING_DAY, HARD_LIMIT, CallCounter  # noqa: E402
+from call_counter import (  # noqa: E402
+    DEFAULT_BILLING_DAY,
+    HARD_LIMIT,
+    CallCounter,
+    try_lock_counter,
+)
 
 JOURNAL_MARKERS = (
     "API /sites/",
@@ -85,6 +90,16 @@ def main(argv: Optional[list] = None) -> int:
     if not 1 <= billing_day <= 31:
         print("Error: billing day must be between 1 and 31", file=sys.stderr)
         return 2
+
+    # The service holds an flock on <file>.lock while running: refuse to seed
+    # then, its in-memory count would overwrite the seeded value.
+    if not try_lock_counter(path):
+        print(
+            "Error: the counter is in use by a running service. "
+            "Stop it first (sudo systemctl stop solaredge-monitor).",
+            file=sys.stderr,
+        )
+        return 3
 
     total = base + args.margin
     counter = CallCounter(path, billing_day=billing_day)

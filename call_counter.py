@@ -27,6 +27,7 @@ This module imports no other project module (avoids import cycles).
 
 import calendar
 import contextlib
+import fcntl
 import json
 import logging
 import os
@@ -106,6 +107,42 @@ def next_reset_for(day: date, billing_day: int) -> date:
     start = cycle_start_for(day, billing_day)
     y, m = _next_month(start.year, start.month)
     return reset_date(y, m, billing_day)
+
+
+_HELD_LOCKS: dict = {}
+
+
+def lock_path_for(counter_path: Union[str, Path]) -> Path:
+    path = Path(counter_path)
+    return path.with_name(path.name + ".lock")
+
+
+def try_lock_counter(counter_path: Union[str, Path], hold: bool = False) -> bool:
+    """Take a non-blocking exclusive flock on the counter's lock file.
+
+    The service holds it for its whole lifetime (hold=True) so that no second
+    writer (seed script, second instance) can clobber the in-memory count.
+    Returns False if another process holds it. With hold=True the lock is kept
+    (idempotent per path within a process); otherwise it is released at once
+    (a pure "is anyone running" probe).
+    """
+    key = str(lock_path_for(counter_path))
+    if key in _HELD_LOCKS:
+        return True
+    try:
+        fd = os.open(key, os.O_RDWR | os.O_CREAT, 0o600)
+    except OSError:
+        return False
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        os.close(fd)
+        return False
+    if hold:
+        _HELD_LOCKS[key] = fd
+    else:
+        os.close(fd)  # closing releases the flock
+    return True
 
 
 def _is_int(value) -> bool:

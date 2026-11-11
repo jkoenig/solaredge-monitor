@@ -59,7 +59,7 @@ from fetcher import (
     export_fetch_state,
     restore_fetch_state,
 )
-from call_counter import CallCounter, QuotaBlocked, HARD_LIMIT
+from call_counter import CallCounter, QuotaBlocked, HARD_LIMIT, try_lock_counter
 from forecast_api import ForecastSolarAPI
 from display import Display
 from screens import get_screens
@@ -306,6 +306,12 @@ def main():
     logging.info(f"Display initialized (backend: {display.backend})")
 
     # Persistent call counter (soft brake / hard stop, daily summary)
+    if not try_lock_counter(config.call_counter_file, hold=True):
+        logging.error(
+            "Call counter file is locked by another process; refusing to start "
+            "(a second writer would corrupt the call count)"
+        )
+        sys.exit(1)
     counter = CallCounter(config.call_counter_file, billing_day=config.billing_day)
     logging.info(
         f"Call budget: {counter.cycle_total()}/{HARD_LIMIT} this cycle, "
