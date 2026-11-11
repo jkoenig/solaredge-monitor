@@ -33,6 +33,10 @@ display/
 .DS_Store
 Thumbs.db
 
+# Local personal values and denylist (never published)
+scripts/*.local.ini
+.internals-denylist
+
 # IDE
 .vscode/
 .idea/
