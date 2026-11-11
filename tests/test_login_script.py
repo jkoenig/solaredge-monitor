@@ -16,6 +16,27 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import solaredge_login as sl  # noqa: E402
 
+_TMP_CONFIG_DIR = None
+_PREV_CONFIG_ENV = None
+
+
+def setUpModule():
+    """Point the local config at a nonexistent path so no test reads a real file."""
+    global _TMP_CONFIG_DIR, _PREV_CONFIG_ENV
+    _TMP_CONFIG_DIR = tempfile.TemporaryDirectory()
+    _PREV_CONFIG_ENV = os.environ.get("SOLAREDGE_LOGIN_CONFIG")
+    os.environ["SOLAREDGE_LOGIN_CONFIG"] = os.path.join(
+        _TMP_CONFIG_DIR.name, "does-not-exist.ini")
+
+
+def tearDownModule():
+    if _PREV_CONFIG_ENV is None:
+        os.environ.pop("SOLAREDGE_LOGIN_CONFIG", None)
+    else:
+        os.environ["SOLAREDGE_LOGIN_CONFIG"] = _PREV_CONFIG_ENV
+    _TMP_CONFIG_DIR.cleanup()
+
+
 try:
     from dotenv import dotenv_values
 except ImportError:  # system python has no python-dotenv
@@ -279,7 +300,7 @@ class UploadAndFlow(unittest.TestCase):
         wb.assert_not_called()
         srv.assert_not_called()
 
-    def test_op_uses_personal_account(self):
+    def test_op_account_passed_through(self):
         item = {"fields": [{"label": "Client ID", "value": "cid"},
                            {"label": "Client Secret", "value": "sec"},
                            {"label": "username", "value": "u"},
@@ -287,14 +308,115 @@ class UploadAndFlow(unittest.TestCase):
         done = mock.Mock(returncode=0, stdout=json.dumps(item), stderr="")
         with mock.patch.object(sl.shutil, "which", return_value="/usr/bin/op"), \
                 mock.patch.object(sl.subprocess, "run", return_value=done) as run:
-            self.assertEqual(sl.read_op_credentials(sl.OP_ITEM, None, None), ("cid", "sec"))
+            self.assertEqual(
+                sl.read_op_credentials(sl.OP_ITEM, None, None, "acct.example"),
+                ("cid", "sec"))
         cmd = run.call_args[0][0]
-        self.assertEqual(cmd[cmd.index("--account") + 1], "account.example.com")
+        self.assertEqual(cmd[cmd.index("--account") + 1], "acct.example")
 
     def test_main_login_error_exit_1(self):
         with mock.patch.object(sl, "read_op_credentials",
                                side_effect=sl.LoginError("boom")):
             self.assertEqual(sl.main([]), 1)
+
+
+class LocalConfigTest(unittest.TestCase):
+    def _write(self, text):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        path = os.path.join(tmp.name, "local.ini")
+        with open(path, "w") as fh:
+            fh.write(text)
+        return path
+
+    def _run_main(self, ini_text, argv, op_stdout=None):
+        path = self._write(ini_text) if ini_text is not None else \
+            os.path.join(tempfile.gettempdir(), "no-such-solaredge-login.ini")
+        item = {"fields": [{"label": "Client ID", "value": "cid"},
+                           {"label": "Client Secret", "value": "sec"}]}
+        done = mock.Mock(returncode=0, stdout=json.dumps(item), stderr="")
+        with mock.patch.dict(os.environ, {"SOLAREDGE_LOGIN_CONFIG": path}), \
+                mock.patch.object(sl.shutil, "which", return_value="/usr/bin/op"), \
+                mock.patch.object(sl.subprocess, "run", return_value=done) as run, \
+                mock.patch.object(sl, "update_remote_env") as upd:
+            rc = sl.main(argv + ["--secrets-only"])
+        return rc, run, upd
+
+    def test_neutral_defaults(self):
+        self.assertEqual(sl.DEFAULT_HOST, "raspberrypi.local")
+        self.assertEqual(sl.OP_ITEM, "SolarEdge API")
+        self.assertEqual(sl.OP_ACCOUNT, "")
+
+    def test_missing_file_returns_empty(self):
+        self.assertEqual(sl.load_local_config("/nonexistent/x.ini"), {})
+
+    def test_reads_values(self):
+        path = self._write("[login]\nhost = pi.example\nremote_dir = /srv/x\n"
+                           "op_item = Example Item\nop_account = acct.example\n")
+        self.assertEqual(sl.load_local_config(path), {
+            "host": "pi.example", "remote_dir": "/srv/x",
+            "op_item": "Example Item", "op_account": "acct.example"})
+
+    def test_no_login_section_raises(self):
+        path = self._write("[other]\nhost = x\n")
+        with self.assertRaises(sl.LoginError) as cm:
+            sl.load_local_config(path)
+        self.assertIn(path, str(cm.exception))
+
+    def test_unknown_key_raises_without_value(self):
+        path = self._write("[login]\nbogus = secret-value\n")
+        with self.assertRaises(sl.LoginError) as cm:
+            sl.load_local_config(path)
+        self.assertIn(path, str(cm.exception))
+        self.assertNotIn("secret-value", str(cm.exception))
+
+    def test_unparsable_raises(self):
+        path = self._write("this is not ini\n")
+        with self.assertRaises(sl.LoginError):
+            sl.load_local_config(path)
+
+    def test_env_path_wins(self):
+        path = self._write("[login]\nhost = envhost.example\n")
+        with mock.patch.dict(os.environ, {"SOLAREDGE_LOGIN_CONFIG": path}):
+            self.assertEqual(sl.load_local_config(), {"host": "envhost.example"})
+
+    def test_default_path_next_to_script(self):
+        env = dict(os.environ)
+        env.pop("SOLAREDGE_LOGIN_CONFIG", None)
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(
+                sl.local_config_path(),
+                str(Path(sl.__file__).resolve().parent / "solaredge_login.local.ini"))
+
+    def test_main_uses_ini_values(self):
+        rc, run, upd = self._run_main(
+            "[login]\nhost = pi.example\nop_item = Example Item\n"
+            "op_account = acct.example\n", [])
+        self.assertEqual(rc, 0)
+        cmd = run.call_args[0][0]
+        self.assertEqual(cmd[cmd.index("--account") + 1], "acct.example")
+        self.assertIn("Example Item", cmd)
+        self.assertEqual(upd.call_args[0][0], "pi.example")
+
+    def test_cli_beats_ini(self):
+        rc, run, upd = self._run_main(
+            "[login]\nhost = pi.example\nop_account = acct.example\n",
+            ["--host", "cli.example", "--op-account", "cli.acct"])
+        self.assertEqual(rc, 0)
+        cmd = run.call_args[0][0]
+        self.assertEqual(cmd[cmd.index("--account") + 1], "cli.acct")
+        self.assertEqual(upd.call_args[0][0], "cli.example")
+
+    def test_empty_account_omits_flag(self):
+        rc, run, upd = self._run_main("[login]\nop_account =\n", [])
+        self.assertEqual(rc, 0)
+        self.assertNotIn("--account", run.call_args[0][0])
+
+    def test_malformed_ini_exit_1(self):
+        with mock.patch.object(sl, "read_op_credentials") as rd:
+            rc, run, upd = self._run_main("garbage\n", [])
+        self.assertEqual(rc, 1)
+        upd.assert_not_called()
 
 
 if __name__ == "__main__":
