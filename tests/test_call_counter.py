@@ -99,18 +99,64 @@ class PersistenceTests(CounterTestBase):
         self.assertEqual(cm.exception.reason, "counter not persisted")
         self.assertEqual(c.cycle_total(t), 1)
 
-    def test_corrupt_file_starts_at_zero_with_warning(self):
-        self.path.write_text("{not json")
-        with self.assertLogs(level="WARNING") as cm:
-            c = self.make()
-        self.assertTrue(any("invalid" in m for m in cm.output))
-        self.assertEqual(c.cycle_total(zt(2026, 11, 11)), 0)
+    def _fixed(self, **kw):
+        return self.make(now_fn=lambda: zt(2026, 11, 11), **kw)
 
-    def test_wrong_version_starts_at_zero_with_warning(self):
+    def test_corrupt_file_fails_safe_at_soft_limit(self):
+        self.path.write_text("{not json")
+        with self.assertLogs(level="ERROR") as cm:
+            c = self._fixed()
+        self.assertTrue(any("invalid" in m for m in cm.output))
+        t = zt(2026, 11, 11)
+        self.assertEqual(c.cycle_total(t), call_counter.SOFT_LIMIT)
+        self.assertEqual(c.state(t), BRAKE)
+        corrupt = self.path.with_name(self.path.name + ".corrupt")
+        self.assertEqual(corrupt.read_text(), "{not json")
+        self.assertFalse(self.path.exists())
+
+    def test_wrong_version_fails_safe_at_soft_limit(self):
         self.path.write_text(json.dumps({"version": 99}))
+        with self.assertLogs(level="ERROR"):
+            c = self._fixed()
+        self.assertEqual(c.cycle_total(zt(2026, 11, 11)), call_counter.SOFT_LIMIT)
+        self.assertTrue(self.path.with_name(self.path.name + ".corrupt").exists())
+
+    def test_unreadable_file_fails_safe(self):
+        self.path.write_text("{}")
+        with mock.patch.object(Path, "read_text", side_effect=PermissionError("no")):
+            with self.assertLogs(level="ERROR"):
+                c = self._fixed()
+        self.assertEqual(c.cycle_total(zt(2026, 11, 11)), call_counter.SOFT_LIMIT)
+
+    def test_fail_safe_then_acquire_continues_from_soft_limit(self):
+        self.path.write_text("garbage")
+        with self.assertLogs(level="ERROR"):
+            c = self._fixed()
+        t = zt(2026, 11, 11)
+        c.acquire("overview", t)
+        self.assertEqual(self._fixed().cycle_total(t), call_counter.SOFT_LIMIT + 1)
+
+    def test_bad_day_entry_keeps_cycle_total(self):
+        t = zt(2026, 11, 11)
+        c = self._fixed()
+        for _ in range(3):
+            c.acquire("overview", t)
+        data = json.loads(self.path.read_text())
+        data["days"]["2026-11-10"] = {"total": "x"}
+        data["days"]["bogus"] = {}
+        self.path.write_text(json.dumps(data))
         with self.assertLogs(level="WARNING"):
-            c = self.make()
-        self.assertEqual(c.cycle_total(zt(2026, 11, 11)), 0)
+            again = self._fixed()
+        self.assertEqual(again.cycle_total(t), 3)
+        self.assertNotIn("2026-11-10", again._days)
+        self.assertFalse(self.path.with_name(self.path.name + ".corrupt").exists())
+
+    def test_never_persists_null_cycle_start(self):
+        c = self._fixed()
+        self.assertTrue(c.save_fetch_state({"a": 1}))
+        data = json.loads(self.path.read_text())
+        self.assertEqual(data["cycle_start"], "2026-11-05")
+        self.assertEqual(self._fixed().fetch_state(), {"a": 1})
 
     def test_missing_file_no_warning(self):
         with self.assertNoLogs(level="WARNING"):

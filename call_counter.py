@@ -147,9 +147,9 @@ class CallCounter:
         try:
             raw = self.path.read_text(encoding="utf-8")
         except FileNotFoundError:
-            return
-        except OSError:
-            logging.warning("Call counter file invalid, starting from 0")
+            return  # first start: nothing used yet
+        except OSError as exc:
+            self._fail_safe(f"unreadable ({exc.__class__.__name__})")
             return
         try:
             data = json.loads(raw)
@@ -166,11 +166,18 @@ class CallCounter:
                 raise ValueError("cycle_total")
             if not all(isinstance(v, bool) for v in (stopped, brake_logged, stop_logged)):
                 raise ValueError("flags")
-            days_raw = data.get("days", {})
-            if not isinstance(days_raw, dict):
-                raise ValueError("days")
-            days = {}
-            for key, entry in days_raw.items():
+        except (ValueError, KeyError, TypeError):
+            self._fail_safe("invalid content")
+            return
+        # History and fetch state are not authoritative: drop only bad parts,
+        # never the totals above.
+        days = {}
+        days_raw = data.get("days", {})
+        if not isinstance(days_raw, dict):
+            logging.warning("Call counter: ignoring invalid days history")
+            days_raw = {}
+        for key, entry in days_raw.items():
+            try:
                 d = date.fromisoformat(key)
                 total = entry["total"]
                 after = entry["cycle_after"]
@@ -179,18 +186,18 @@ class CallCounter:
                     raise ValueError("day")
                 if not all(isinstance(k, str) and _is_int(v) for k, v in eps.items()):
                     raise ValueError("endpoints")
-                days[d.isoformat()] = {
-                    "total": total,
-                    "cycle_after": after,
-                    "endpoints": dict(eps),
-                }
-            fetch_state = data.get("fetch_state", {})
-            if not isinstance(fetch_state, dict):
-                raise ValueError("fetch_state")
-        except (ValueError, KeyError, TypeError):
-            logging.warning("Call counter file invalid, starting from 0")
-            self._reset_state()
-            return
+            except (ValueError, KeyError, TypeError):
+                logging.warning("Call counter: dropping invalid day entry")
+                continue
+            days[d.isoformat()] = {
+                "total": total,
+                "cycle_after": after,
+                "endpoints": dict(eps),
+            }
+        fetch_state = data.get("fetch_state", {})
+        if not isinstance(fetch_state, dict):
+            logging.warning("Call counter: ignoring invalid fetch state")
+            fetch_state = {}
         self._cycle_start = cycle_start
         self._cycle_total = cycle_total
         self._stopped = stopped
@@ -199,6 +206,27 @@ class CallCounter:
         self._last_summary_day = last_summary
         self._days = days
         self._fetch_state = fetch_state
+
+    def _fail_safe(self, why: str) -> None:
+        """Unusable counter file: keep it aside and start conservatively.
+
+        Never start from 0 (that would grant a fresh budget); start at the soft
+        limit so the brake is active until the owner re-seeds the counter.
+        """
+        self._reset_state()
+        corrupt = self.path.with_name(self.path.name + ".corrupt")
+        try:
+            os.replace(self.path, corrupt)
+            kept = f"kept as {corrupt.name}"
+        except OSError:
+            kept = "could not be moved aside"
+        self._cycle_start = cycle_start_for(self._today(None), self.billing_day)
+        self._cycle_total = self.soft_limit
+        logging.error(
+            f"Call counter file {why} ({kept}); starting at the soft limit "
+            f"{self.soft_limit}/{self.hard_limit} (brake). Re-seed with "
+            "scripts/seed_call_counter.py"
+        )
 
     def _now(self, now: Optional[datetime]) -> datetime:
         return now if now is not None else self._now_fn()
@@ -252,6 +280,8 @@ class CallCounter:
 
     def _persist(self) -> bool:
         """Atomically write the counter file. Never raises OSError."""
+        if self._cycle_start is None:
+            self._roll(None)  # never persist a null cycle_start
         self._prune()
         payload = json.dumps(
             {
