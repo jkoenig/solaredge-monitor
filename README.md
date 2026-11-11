@@ -83,8 +83,10 @@ Copy `.env.example` to `.env` and configure:
 |----------|----------|---------|-------------|
 | `SOLAREDGE_SITE_ID` | Yes | — | Your SolarEdge site ID |
 | `SOLAREDGE_POLL_INTERVAL` | No | `30` | Minutes between API polls (minimum: 30, every API call costs a credit) |
-| `SOLAREDGE_SLEEP_START` | No | `20` | Hour to pause polling (0-23) |
-| `SOLAREDGE_SLEEP_END` | No | `7` | Hour to resume polling (0-23) |
+| `SOLAREDGE_SLEEP_START` | No | `20` | Hour the night plan starts (0-23): display keeps rotating, only battery calls about every 3 h |
+| `SOLAREDGE_SLEEP_END` | No | `7` | Hour the day plan starts (0-23) |
+| `SOLAREDGE_BILLING_DAY` | No | `5` | Day of month the SolarEdge credit cycle resets (1-31; last day of month if shorter) |
+| `SOLAREDGE_CALL_COUNTER_FILE` | No | `.calls.json` next to the token file | Call counter file |
 | `SOLAREDGE_DEBUG` | No | `false` | Enable debug mode (saves PNG files instead of using display) |
 | `SOLAREDGE_LOG_LEVEL` | No | `INFO` | Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL |
 | | | | **Solar Forecast** (optional) |
@@ -112,6 +114,31 @@ SOLAREDGE_LOG_LEVEL=INFO
 # FORECAST_TILT=30
 # FORECAST_AZIMUTH=0
 # FORECAST_KWP=9.8
+```
+
+## API call budget
+
+The free SolarEdge tier gives 2,000 credits per month. The monitor plans its calls to stay well below that.
+
+- **Day plan:** overview every 30 minutes from 07:00 to 20:00, battery storage hourly, history once a day, temperature twice.
+- **Night plan:** only battery storage, at about 23:00, 02:00 and 05:00. The display keeps rotating the last values.
+- **Counting:** every SolarEdge request, including retries and token refreshes, is counted in `.calls.json`. Forecast.Solar calls are not counted.
+- **Soft brake at 1,500:** overview only hourly, no night calls.
+- **Hard stop at 1,800:** no calls at all, the last values stay on screen, and the display shows "Kontingent aufgebraucht / Neue Werte ab D.M.". A SolarEdge "Monthly credit limit reached." response also stops the calls.
+- **Reset:** at 00:00 on the billing day (`SOLAREDGE_BILLING_DAY`).
+
+How to check the budget from your Mac:
+
+```bash
+ssh raspberrypi.local 'journalctl -u solaredge-monitor --since today -o cat | grep "Calls "'
+```
+
+The daily line looks like `Calls 2025-01-15: 41 (overview 22, storage 11, history 2, temperature 2, token 4); cycle 300/1800`. `cat .calls.json` shows per-day totals of the current and previous cycle. Compare with the Usage tab in the SolarEdge console.
+
+One-off seed at deploy (stop the service first, then start it again afterwards):
+
+```bash
+journalctl -u solaredge-monitor --since "YYYY-MM-DD 00:00" -o cat | venv/bin/python3 scripts/seed_call_counter.py --from-journal --margin 20
 ```
 
 ## Development (without hardware)
