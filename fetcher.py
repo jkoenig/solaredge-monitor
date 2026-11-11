@@ -1,9 +1,16 @@
-"""One fetch round of the interim D-07 cadence.
+"""One fetch round of the final Phase 13 cadence.
 
-The cadence itself lives in fetch_schedule.FetchPlan; this module only runs
+The cadence itself lives in fetch_schedule.FetchPlan (day: overview, storage,
+history, temperature; night: only battery storage slots). This module runs
 the jobs the plan says are due, keeps the last good value of every data type
-in a DataCache and patches today's bar of the history (D-06). Phase 13 adds
-the call counter around these calls.
+in a DataCache and patches today's bar of the history. The counter state
+(ok/brake/stopped) is passed through as quota_mode to every plan.due call.
+
+Fetch state (plan slots, history, temperature and the last overview's energy
+values with their site-local date) is exported into the counter file and
+restored at startup (D-06), so a restart neither re-fetches history nor shows
+a blank display at night. Today's history bar is patched only from an
+overview fetched on the same site-local date.
 
 LoginRequired raised by any API method propagates to the caller.
 """
@@ -25,12 +32,14 @@ class DataCache:
     history: Optional[EnergyHistory] = None
     forecast: Optional[ForecastData] = None
     temperature: Optional[float] = None
+    energy_date: Optional[date] = None  # site-local date of the overview behind `energy`
 
 
 @dataclass(frozen=True)
 class RoundResult:
     overview_ok: bool
     battery_detected: Optional[bool] = None
+    overview_attempted: bool = True
 
 
 def patch_history_today(
@@ -70,20 +79,23 @@ def fetch_round(
     has_battery: bool,
     battery_known: bool,
     forecast_api=None,
+    quota_mode: str = "ok",
 ) -> RoundResult:
     """Run every job FetchPlan says is due and update the cache."""
     detected = None
     if not battery_known:
-        if fs.DEVICES in plan.due(now, has_battery, battery_known):
+        if fs.DEVICES in plan.due(now, has_battery, battery_known, quota_mode):
             detected = api.detect_battery()
             plan.record(fs.DEVICES, now, detected is not None)
             if detected is not None:
                 has_battery = detected
 
-    jobs = plan.due(now, has_battery, battery_known or detected is not None)
+    jobs = plan.due(now, has_battery, battery_known or detected is not None, quota_mode)
     if not jobs:
-        logging.debug("Fetch round skipped (overview backoff)")
-        return RoundResult(overview_ok=False, battery_detected=detected)
+        logging.debug("Fetch round skipped (no jobs due)")
+        return RoundResult(
+            overview_ok=False, battery_detected=detected, overview_attempted=False
+        )
     logging.info("Fetch round: jobs=%s", sorted(jobs))
 
     overview_ok = False
@@ -93,6 +105,7 @@ def fetch_round(
         plan.record(fs.OVERVIEW, now, energy is not None)
         if energy is not None:
             cache.energy = energy
+            cache.energy_date = now.date()
             overview_ok = True
 
     if fs.TEMPERATURE in jobs:
@@ -116,14 +129,15 @@ def fetch_round(
         if history is not None:
             cache.history = history
 
-    if cache.history is not None and cache.energy is not None:
+    energy_today = cache.energy is not None and cache.energy_date == now.date()
+    if cache.history is not None and energy_today:
         cache.history = patch_history_today(
             cache.history, now.date(), cache.energy.production, cache.energy.consumption
         )
 
     if forecast_api is not None:
         raw = forecast_api.get_forecast()
-        actual = cache.energy.production if cache.energy is not None else 0.0
+        actual = cache.energy.production if energy_today else 0.0
         if raw:
             cache.forecast = ForecastData(
                 today_kwh=raw.today_kwh,
@@ -134,7 +148,119 @@ def fetch_round(
         elif cache.forecast is not None and overview_ok:
             cache.forecast = replace(cache.forecast, actual_production=actual)
 
-    return RoundResult(overview_ok=overview_ok, battery_detected=detected)
+    return RoundResult(
+        overview_ok=overview_ok,
+        battery_detected=detected,
+        overview_attempted=fs.OVERVIEW in jobs,
+    )
+
+
+_ENERGY_FIELDS = (
+    "production", "self_consumption", "feed_in", "consumption",
+    "purchased", "to_storage", "from_pv", "from_storage",
+)
+
+
+def _is_num(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def export_fetch_state(plan, cache: DataCache) -> dict:
+    """JSON-able fetch state for the counter file (values only, no ids)."""
+    history = None
+    if cache.history is not None:
+        history = {
+            "dates": list(cache.history.dates),
+            "production": list(cache.history.production),
+            "consumption": list(cache.history.consumption),
+            "fetched_at": cache.history.fetched_at.isoformat(),
+        }
+    energy = None
+    if cache.energy is not None and cache.energy_date is not None:
+        energy = {f: float(getattr(cache.energy, f)) for f in _ENERGY_FIELDS}
+        energy["date"] = cache.energy_date.isoformat()
+    return {
+        "plan": plan.to_dict(),
+        "history": history,
+        "temperature": cache.temperature,
+        "energy": energy,
+    }
+
+
+def _restore_history(h, now: datetime) -> Optional[EnergyHistory]:
+    if not isinstance(h, dict):
+        return None
+    dates, prod, cons = h.get("dates"), h.get("production"), h.get("consumption")
+    if not (isinstance(dates, list) and isinstance(prod, list) and isinstance(cons, list)):
+        return None
+    if not (len(dates) == len(prod) == len(cons)) or not dates:
+        return None
+    if not all(isinstance(d, str) for d in dates):
+        return None
+    if not all(_is_num(v) for v in prod) or not all(_is_num(v) for v in cons):
+        return None
+    try:
+        fetched_at = datetime.fromisoformat(h.get("fetched_at"))
+    except (TypeError, ValueError):
+        fetched_at = datetime.now(now.tzinfo)
+    return EnergyHistory(
+        dates=list(dates), production=list(prod), consumption=list(cons),
+        fetched_at=fetched_at,
+    )
+
+
+def _restore_energy(e, now: datetime):
+    if not isinstance(e, dict):
+        return None
+    if not all(_is_num(e.get(f)) for f in _ENERGY_FIELDS):
+        return None
+    try:
+        d = date.fromisoformat(e.get("date"))
+    except (TypeError, ValueError):
+        return None
+    details = EnergyDetails(
+        **{f: float(e[f]) for f in _ENERGY_FIELDS},
+        fetched_at=datetime.now(now.tzinfo),
+    )
+    return details, d
+
+
+def restore_fetch_state(plan, cache: DataCache, data, now: datetime) -> None:
+    """Restore cache values and plan slots from export_fetch_state output.
+
+    Tolerant: malformed input never raises and leaves the affected part empty.
+    Battery and forecast are deliberately not persisted.
+    """
+    if not isinstance(data, dict):
+        return
+    history = _restore_history(data.get("history"), now)
+    if history is not None:
+        cache.history = history
+    temp = data.get("temperature")
+    temp_ok = _is_num(temp)
+    if temp_ok:
+        cache.temperature = float(temp)
+    restored = _restore_energy(data.get("energy"), now)
+    if restored is not None:
+        cache.energy, cache.energy_date = restored
+
+    plan_data = data.get("plan")
+    if isinstance(plan_data, dict):
+        slots = plan_data.get("slots")
+        if isinstance(slots, list):
+            def keep(e):
+                if not isinstance(e, dict) or e.get("succeeded") is not True:
+                    return True
+                if e.get("job") == fs.HISTORY:
+                    return history is not None
+                if e.get("job") == fs.TEMPERATURE:
+                    return temp_ok
+                return True
+            plan_data = dict(plan_data, slots=[e for e in slots if keep(e)])
+        try:
+            plan.load_dict(plan_data, now)
+        except Exception as exc:  # never break startup on a bad file
+            logging.warning("Could not restore fetch plan state: %s", exc)
 
 
 def build_cycle(screens: list, cache: DataCache) -> List[tuple]:
