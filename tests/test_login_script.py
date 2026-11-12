@@ -357,6 +357,30 @@ class LocalConfigTest(unittest.TestCase):
             "host": "pi.example", "remote_dir": "/srv/x",
             "op_item": "Example Item", "op_account": "acct.example"})
 
+    def test_empty_values_count_as_unset(self):
+        path = self._write("[login]\nhost =\nremote_dir =   \nop_item =\n"
+                           "op_account =\n")
+        # only op_account may be empty; the others fall back to defaults
+        self.assertEqual(sl.load_local_config(path), {"op_account": ""})
+
+    def test_main_empty_ini_values_use_defaults(self):
+        rc, run, upd = self._run_main(
+            "[login]\nhost =\nremote_dir =\nop_item =\nop_account =\n", [])
+        self.assertEqual(rc, 0)
+        cmd = run.call_args[0][0]
+        self.assertIn(sl.OP_ITEM, cmd)
+        self.assertNotIn("", cmd)
+        self.assertNotIn("--account", cmd)
+        self.assertEqual(upd.call_args[0][0], sl.DEFAULT_HOST)
+        self.assertEqual(upd.call_args[0][1], sl.DEFAULT_REMOTE_DIR)
+
+    def test_main_partly_empty_ini_keeps_filled_values(self):
+        rc, run, upd = self._run_main(
+            "[login]\nhost = pi.example\nremote_dir =\n", [])
+        self.assertEqual(rc, 0)
+        self.assertEqual(upd.call_args[0][0], "pi.example")
+        self.assertEqual(upd.call_args[0][1], sl.DEFAULT_REMOTE_DIR)
+
     def test_no_login_section_raises(self):
         path = self._write("[other]\nhost = x\n")
         with self.assertRaises(sl.LoginError) as cm:

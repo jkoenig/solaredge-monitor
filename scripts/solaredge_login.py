@@ -58,6 +58,7 @@ DEFAULT_REMOTE_DIR = "/home/pi/solaredge-monitor"
 LOCAL_CONFIG_ENV = "SOLAREDGE_LOGIN_CONFIG"
 LOCAL_CONFIG_NAME = "solaredge_login.local.ini"
 LOCAL_CONFIG_KEYS = ("host", "remote_dir", "op_item", "op_account")
+LOCAL_CONFIG_EMPTY_OK = ("op_account",)
 TOKEN_FILENAME = ".tokens.json"
 CALLBACK_TIMEOUT_SECONDS = 300
 GRANT_MONTHS = 24
@@ -305,7 +306,12 @@ def load_local_config(path: Optional[str] = None) -> Dict[str, str]:
             "Local config %s: unknown key(s): %s (allowed: %s)"
             % (path, ", ".join(unknown), ", ".join(LOCAL_CONFIG_KEYS))
         )
-    return {k: v for k, v in parser["login"].items()}
+    # An empty value (e.g. a half-filled copy of the example file) counts as
+    # unset so the default applies; only op_account may legitimately be empty.
+    return {
+        k: v.strip() for k, v in parser["login"].items()
+        if v.strip() or k in LOCAL_CONFIG_EMPTY_OK
+    }
 
 
 # ---------------------------------------------------------------------------
