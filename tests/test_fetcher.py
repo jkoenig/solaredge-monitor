@@ -460,3 +460,12 @@ class QuotaAndStateTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class IsNumFiniteTests(unittest.TestCase):
+    def test_non_finite_numbers_are_not_numbers(self):
+        import fetcher
+        for bad in (float("inf"), float("-inf"), float("nan"), True):
+            self.assertFalse(fetcher._is_num(bad))
+        for good in (0, 1.5, -3):
+            self.assertTrue(fetcher._is_num(good))

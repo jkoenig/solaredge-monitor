@@ -193,7 +193,7 @@ class CallCounter:
                 # was never persisted: a missing file is NOT a clean start.
                 self._fail_safe("missing while a .corrupt copy exists", move=False)
             return  # otherwise first start: nothing used yet
-        except OSError as exc:
+        except (OSError, UnicodeDecodeError) as exc:
             self._fail_safe(f"unreadable ({exc.__class__.__name__})")
             return
         try:
@@ -211,7 +211,7 @@ class CallCounter:
                 raise ValueError("cycle_total")
             if not all(isinstance(v, bool) for v in (stopped, brake_logged, stop_logged)):
                 raise ValueError("flags")
-        except (ValueError, KeyError, TypeError):
+        except (ValueError, KeyError, TypeError, RecursionError):
             self._fail_safe("invalid content")
             return
         # History and fetch state are not authoritative: drop only bad parts,
@@ -438,13 +438,14 @@ class CallCounter:
         logging.debug(f"Counted call: {endpoint} (cycle {self._cycle_total}/{self.hard_limit})")
 
     def mark_exhausted(self, now: Optional[datetime] = None) -> None:
-        """Stop until the next reset (SolarEdge reported the credit limit as reached)."""
+        """Stop until the next reset (SolarEdge reported the credit limit as
+        reached, or kept answering 429; the caller logs which)."""
         today = self._roll(now)
         self._stopped = True
         if not self._stop_logged:
             self._stop_logged = True
             logging.error(
-                "SolarEdge reports monthly credit limit reached; "
+                "SolarEdge rejects calls (credit limit); "
                 f"stopping API calls until {self._next_reset(today)}"
             )
         if not self._persist():

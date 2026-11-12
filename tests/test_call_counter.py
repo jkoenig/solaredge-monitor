@@ -119,6 +119,18 @@ class PersistenceTests(CounterTestBase):
             again = self._fixed()
         self.assertEqual(again.cycle_total(t), call_counter.SOFT_LIMIT)
 
+    def test_invalid_utf8_file_fails_safe(self):
+        self.path.write_bytes(b"\xff\xfe\x80 not text")
+        with self.assertLogs(level="ERROR"):
+            c = self._fixed()
+        self.assertEqual(c.cycle_total(zt(2026, 11, 11)), call_counter.SOFT_LIMIT)
+
+    def test_deeply_nested_json_fails_safe(self):
+        self.path.write_text("[" * 200000 + "]" * 200000)
+        with self.assertLogs(level="ERROR"):
+            c = self._fixed()
+        self.assertEqual(c.cycle_total(zt(2026, 11, 11)), call_counter.SOFT_LIMIT)
+
     def test_fail_safe_persist_failure_still_soft_limit_and_restart_safe(self):
         self.path.write_text("{not json")
         t = zt(2026, 11, 11)

@@ -15,6 +15,7 @@ overview fetched on the same site-local date.
 LoginRequired raised by any API method propagates to the caller.
 """
 
+import math
 import logging
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
@@ -174,7 +175,7 @@ _ENERGY_FIELDS = (
 
 
 def _is_num(v) -> bool:
-    return isinstance(v, (int, float)) and not isinstance(v, bool)
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
 
 
 def export_fetch_state(plan, cache: DataCache) -> dict:
