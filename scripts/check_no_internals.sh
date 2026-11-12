@@ -63,19 +63,17 @@ else
       done < <(git grep -I -i -F -l -f "$DENYLIST" "$rev" || true)
     done < <(git rev-list --all)
 
-    # (2) commit metadata and messages: hashes only
+    # (2) commit metadata and messages: hashes only.
+    # One commit per iteration, so a hit can only ever report the hash
+    # and never a word of the message. grep reads all input (no -q) so
+    # that git never sees a closed pipe under pipefail.
     while IFS= read -r h; do
-      [ -n "$h" ] && hit "commit-message/author: $h"
-    done < <(
-      git log --all --format='%x01%H %an <%ae> %cn <%ce>%n%B' \
-        | awk 'BEGIN{RS="\001"} NR>1 {print}' \
-        | while IFS= read -r rec; do
-            hash="${rec%% *}"
-            if printf '%s' "$rec" | grep -q -i -F -f "$DENYLIST"; then
-              echo "$hash"
-            fi
-          done
-    )
+      [ -n "$h" ] || continue
+      if git show -s --format='%an <%ae> %cn <%ce>%n%B' "$h" \
+          | grep -i -F -f "$DENYLIST" >/dev/null; then
+        hit "commit-message/author: $h"
+      fi
+    done < <(git rev-list --all)
 
     # (3) tags: names only
     while IFS= read -r t; do
