@@ -26,6 +26,15 @@ class EnvExampleTest(unittest.TestCase):
         self.assertIn("SOLAREDGE_CLIENT_ID", values)
         self.assertIn("SOLAREDGE_CLIENT_SECRET", values)
 
+    def test_client_keys_ship_empty(self):
+        # A placeholder would count as a real credential after "cp .env.example .env"
+        # and could be sent to the token endpoint. Empty means "login required".
+        values = dotenv_values(ROOT / ".env.example")
+        self.assertEqual(values["SOLAREDGE_CLIENT_ID"], "")
+        self.assertEqual(values["SOLAREDGE_CLIENT_SECRET"], "")
+        self.assertNotIn("_here", "\n".join(
+            line for line in self.text.splitlines() if not line.lstrip().startswith("#")))
+
     def test_no_workflow_references(self):
         self.assertIsNone(FORBIDDEN.search(self.text))
 

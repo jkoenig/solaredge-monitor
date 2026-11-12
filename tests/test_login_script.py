@@ -2,6 +2,7 @@
 import io
 import json
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -142,6 +143,20 @@ class RemoteEnvMerge(unittest.TestCase):
                 "# comment\nFOO=1\nSOLAREDGE_CLIENT_ID=new\nBAR=2\n"
                 "SOLAREDGE_CLIENT_SECRET=sec\n")
             self.assertEqual(stat.S_IMODE(os.stat(p).st_mode), 0o600)
+
+    @unittest.skipIf(dotenv_values is None, "python-dotenv not installed")
+    def test_fills_empty_keys_of_env_example(self):
+        example = Path(__file__).resolve().parent.parent / ".env.example"
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, ".env")
+            shutil.copy(example, p)
+            self.run_merge(p, "SOLAREDGE_CLIENT_ID=i\nSOLAREDGE_CLIENT_SECRET=s\n")
+            values = dotenv_values(p, interpolate=False)
+            self.assertEqual(values["SOLAREDGE_CLIENT_ID"], "i")
+            self.assertEqual(values["SOLAREDGE_CLIENT_SECRET"], "s")
+            text = Path(p).read_text()
+            self.assertEqual(text.count("SOLAREDGE_CLIENT_ID="), 1)
+            self.assertEqual(text.count("SOLAREDGE_CLIENT_SECRET="), 1)
 
     def test_idempotent(self):
         with tempfile.TemporaryDirectory() as d:
