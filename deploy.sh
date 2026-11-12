@@ -45,8 +45,23 @@ main() {
   echo "[3/4] Checking systemd unit..."
   UNIT_NAME="solaredge-monitor.service"
   UNIT_SRC="$SCRIPT_DIR/$UNIT_NAME"
-  # SOLAREDGE_UNIT_DST is an override for tests only.
-  UNIT_DST="${SOLAREDGE_UNIT_DST:-/etc/systemd/system/$UNIT_NAME}"
+  UNIT_DST="/etc/systemd/system/$UNIT_NAME"
+  # SOLAREDGE_UNIT_DST is an override for tests only. The install below
+  # runs as root, so the override counts only together with
+  # SOLAREDGE_DEPLOY_TEST=1 and never for a target under /etc.
+  if [ -n "${SOLAREDGE_UNIT_DST:-}" ]; then
+    case "$SOLAREDGE_UNIT_DST" in
+      /etc|/etc/*|*/../*|*/..) UNIT_DST_OK=0 ;;
+      /*) UNIT_DST_OK=1 ;;
+      *) UNIT_DST_OK=0 ;;
+    esac
+    if [ "${SOLAREDGE_DEPLOY_TEST:-}" = "1" ] && [ "$UNIT_DST_OK" -eq 1 ]; then
+      UNIT_DST="$SOLAREDGE_UNIT_DST"
+      echo "  TEST MODE: unit destination is $UNIT_DST"
+    else
+      echo "  WARNING: ignoring SOLAREDGE_UNIT_DST (tests only), using $UNIT_DST"
+    fi
+  fi
   if ! cmp -s "$UNIT_SRC" "$UNIT_DST"; then
     echo "  Unit file changed, installing..."
     sudo install -m 644 -o root -g root "$UNIT_SRC" "$UNIT_DST"

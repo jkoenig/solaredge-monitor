@@ -11,8 +11,12 @@ DEPLOY = ROOT / "deploy.sh"
 UNIT = ROOT / "solaredge-monitor.service"
 
 class DeployScriptTest(unittest.TestCase):
-    def run_deploy(self, dst_mode):
-        """dst_mode: 'missing', 'different' or 'identical'."""
+    def run_deploy(self, dst_mode, test_flag="1", dst_override=None):
+        """dst_mode: 'missing', 'different' or 'identical'.
+
+        test_flag: value for SOLAREDGE_DEPLOY_TEST (None = not set).
+        dst_override: value for SOLAREDGE_UNIT_DST instead of the temp file.
+        """
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             shutil.copy(DEPLOY, tmp / "deploy.sh")
@@ -37,7 +41,10 @@ class DeployScriptTest(unittest.TestCase):
                 shutil.copy(UNIT, dst)
             env = dict(os.environ)
             env["PATH"] = "%s:%s" % (bindir, env["PATH"])
-            env["SOLAREDGE_UNIT_DST"] = str(dst)
+            env["SOLAREDGE_UNIT_DST"] = dst_override or str(dst)
+            env.pop("SOLAREDGE_DEPLOY_TEST", None)
+            if test_flag is not None:
+                env["SOLAREDGE_DEPLOY_TEST"] = test_flag
             r = subprocess.run(
                 ["bash", str(tmp / "deploy.sh")],
                 capture_output=True, text=True, timeout=30, env=env, cwd=str(tmp),
@@ -78,6 +85,39 @@ class DeployScriptTest(unittest.TestCase):
         self.assertFalse([l for l in sudo if l.startswith("install")])
         self.assertNotIn("systemctl daemon-reload", sudo)
         self.assertIn("systemctl restart solaredge-monitor", sudo)
+
+    REAL_DST = "/etc/systemd/system/solaredge-monitor.service"
+
+    def assert_override_ignored(self, r, sudo, tmp):
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("ignoring SOLAREDGE_UNIT_DST", r.stdout)
+        self.assertNotIn("TEST MODE", r.stdout)
+        installs = [l for l in sudo if l.startswith("install")]
+        for line in installs:
+            self.assertEqual(
+                line,
+                "install -m 644 -o root -g root %s/solaredge-monitor.service %s"
+                % (tmp, self.REAL_DST),
+            )
+        self.assertFalse([l for l in sudo if "dst.service" in l])
+        self.assertIn("systemctl restart solaredge-monitor", sudo)
+
+    def test_override_ignored_without_test_flag(self):
+        # sudo is the fake from run_deploy, nothing is written for real.
+        for flag in (None, "", "0", "true"):
+            r, sudo, _, _, tmp = self.run_deploy("different", test_flag=flag)
+            self.assert_override_ignored(r, sudo, tmp)
+
+    def test_override_ignored_for_unsafe_targets(self):
+        for target in ("/etc/cron.d/x", "/etc", "/tmp/../etc/x", "relative/x"):
+            r, sudo, _, _, tmp = self.run_deploy(
+                "missing", test_flag="1", dst_override=target)
+            self.assert_override_ignored(r, sudo, tmp)
+            self.assertFalse([l for l in sudo if l.endswith(" " + target)])
+
+    def test_test_mode_announces_destination(self):
+        r, _, _, _, tmp = self.run_deploy("missing")
+        self.assertIn("TEST MODE: unit destination is %s/dst.service" % tmp, r.stdout)
 
     def test_script_structure(self):
         text = DEPLOY.read_text()
