@@ -20,6 +20,20 @@ if [ "$EUID" -eq 0 ]; then
   exit 1
 fi
 
+# The systemd unit has a fixed path. Stop before changing anything if this
+# checkout lives somewhere else: the installed service could never start.
+UNIT_DIR="$(sed -n 's/^WorkingDirectory=//p' solaredge-monitor.service)"
+if [ -z "$UNIT_DIR" ]; then
+  echo "ERROR: solaredge-monitor.service not found or has no WorkingDirectory."
+  exit 1
+fi
+if [ "$SCRIPT_DIR" != "$UNIT_DIR" ] && [ "$(pwd -P)" != "$UNIT_DIR" ]; then
+  echo "ERROR: This checkout is in $SCRIPT_DIR,"
+  echo "but the systemd unit expects $UNIT_DIR."
+  echo "Move or clone the repository to $UNIT_DIR and run ./install.sh there."
+  exit 1
+fi
+
 REBOOT_REQUIRED=false
 NEEDS_ENV_CONFIG=false
 
