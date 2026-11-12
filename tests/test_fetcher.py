@@ -458,9 +458,6 @@ class QuotaAndStateTests(unittest.TestCase):
             self.assertEqual(c2.temperature, 18.0)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class IsNumFiniteTests(unittest.TestCase):
     def test_non_finite_numbers_are_not_numbers(self):
@@ -469,3 +466,6 @@ class IsNumFiniteTests(unittest.TestCase):
             self.assertFalse(fetcher._is_num(bad))
         for good in (0, 1.5, -3):
             self.assertTrue(fetcher._is_num(good))
+
+if __name__ == "__main__":
+    unittest.main()
