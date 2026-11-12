@@ -6,9 +6,18 @@ only get_overview may retry, once, on 5xx or timeout. All other jobs make one
 attempt. 400/403/404/429 are never retried.
 
 All public methods return None on any fetch or parse failure so the caller can
-keep showing stale data. QuotaBlocked (call budget stopped) also returns None;
-a 429 with the monthly-limit detail switches the call counter to stopped. LoginRequired is deliberately not caught: it
-propagates to main.py, which shows the login screen.
+keep showing stale data. QuotaBlocked (call budget stopped) also returns None.
+LoginRequired is deliberately not caught: it propagates to main.py, which shows
+the login screen.
+
+A 429 with the monthly-limit detail switches the call counter to stopped at
+once. As a fallback (in case SolarEdge changes that wording), the client also
+counts consecutive 429 responses in memory: CONSECUTIVE_429_STOP_THRESHOLD of
+them in a row without a recognised monthly-limit body stop the counter the
+same way. Any other HTTP response resets that count; network errors and
+timeouts neither count nor reset. The threshold is higher than the number of
+calls one fetch round can send, so a short per-minute rate limit inside a
+single round cannot trigger it.
 
 Logs never contain the site id, serial numbers, tokens, params or response
 bodies. Endpoints are logged as path templates with a literal "{site_id}".
@@ -31,6 +40,10 @@ SITE_TZ = ZoneInfo("Europe/Zurich")
 BASE_URL = "https://monitoringapi.solaredge.com/v2"
 IDLE_THRESHOLD_W = 50
 MONTHLY_LIMIT_DETAIL = "Monthly credit limit reached."
+# Fallback stop: this many 429 responses in a row (no other HTTP response in
+# between) are treated like the monthly-limit 429, even if the body is not
+# recognised. Must stay above the number of calls one fetch round can send.
+CONSECUTIVE_429_STOP_THRESHOLD = 6
 
 
 def _is_monthly_limit(err_body) -> bool:
@@ -104,6 +117,8 @@ class SolarEdgeAPI:
         # Sticky: set when the call budget blocked a request; the caller
         # (fetcher) resets it before each job so it can tell "blocked" from "failed".
         self.quota_blocked = False
+        # Consecutive HTTP 429 responses (in memory only, not persisted).
+        self._consecutive_429 = 0
 
     def _now(self) -> datetime:
         return self._now_fn()
@@ -144,6 +159,12 @@ class SolarEdgeAPI:
 
             status = resp.status_code
             logging.info(f"API {path_template} -> {status}")
+            # Only real HTTP responses reach this point: a 429 counts, every
+            # other status resets. Timeouts/network errors returned above.
+            if status == 429:
+                self._consecutive_429 += 1
+            else:
+                self._consecutive_429 = 0
 
             if status >= 500:
                 if attempt < attempts:
@@ -166,14 +187,25 @@ class SolarEdgeAPI:
                     err_body = resp.json()
                 except ValueError:
                     err_body = None
+                counter = getattr(self.token_store, "counter", None)
                 if _is_monthly_limit(err_body):
-                    counter = getattr(self.token_store, "counter", None)
+                    self._consecutive_429 = 0
                     if counter is not None:
                         counter.mark_exhausted()
                     logging.error(
                         "SolarEdge monthly credit limit reached; "
                         "all API calls stop until the next billing cycle"
                     )
+                elif self._consecutive_429 >= CONSECUTIVE_429_STOP_THRESHOLD:
+                    count = self._consecutive_429
+                    self._consecutive_429 = 0
+                    logging.warning(
+                        f"API stop triggered by {count} consecutive 429 responses "
+                        "without a recognised monthly-limit body; "
+                        "all API calls stop until the next billing cycle"
+                    )
+                    if counter is not None:
+                        counter.mark_exhausted()
                 return None
             if status >= 400:
                 logging.error(f"API HTTP error {status}: {path_template}")

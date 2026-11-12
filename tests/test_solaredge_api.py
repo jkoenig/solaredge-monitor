@@ -627,5 +627,125 @@ class QuotaTests(unittest.TestCase):
         self.assertEqual(store.authorized_request.call_count, 1)
 
 
+RATE_429 = {"message": "API rate limit exceeded"}
+MONTHLY_429 = {"detail": "Monthly credit limit reached."}
+
+
+class Consecutive429Tests(unittest.TestCase):
+    """Fallback stop after N consecutive 429s without a monthly-limit body."""
+
+    N = solaredge_api.CONSECUTIVE_429_STOP_THRESHOLD
+
+    def call(self, api, times):
+        with self.assertLogs(level="WARNING") as cm:
+            for _ in range(times):
+                self.assertIsNone(api.get_overview(retry=False))
+        return "\n".join(cm.output)
+
+    def test_threshold_is_above_one_fetch_round(self):
+        self.assertEqual(self.N, 6)
+
+    def test_threshold_reached_marks_exhausted_and_warns_once(self):
+        api, store, _ = make_api([fake_response(429, RATE_429) for _ in range(self.N)])
+        out = self.call(api, self.N - 1)
+        store.counter.mark_exhausted.assert_not_called()
+        self.assertNotIn("consecutive 429", out)
+        with self.assertLogs(level="WARNING") as cm:
+            self.assertIsNone(api.get_overview(retry=False))
+        store.counter.mark_exhausted.assert_called_once_with()
+        hits = [r for r in cm.records if "consecutive 429" in r.getMessage()]
+        self.assertEqual(len(hits), 1)
+        self.assertEqual(hits[0].levelname, "WARNING")
+        self.assertIn(f"{self.N} consecutive 429 responses", hits[0].getMessage())
+        self.assertIn("without a recognised monthly-limit body", hits[0].getMessage())
+        self.assertNotIn(FAKE_SITE_ID, "\n".join(cm.output))
+
+    def test_non_json_429_bodies_count(self):
+        api, store, _ = make_api([fake_response(429, json_error=True) for _ in range(self.N)])
+        self.call(api, self.N)
+        store.counter.mark_exhausted.assert_called_once_with()
+
+    def test_below_threshold_does_not_stop(self):
+        api, store, _ = make_api([fake_response(429, RATE_429) for _ in range(self.N - 1)])
+        out = self.call(api, self.N - 1)
+        store.counter.mark_exhausted.assert_not_called()
+        self.assertNotIn("consecutive 429", out)
+
+    def test_success_in_between_resets(self):
+        responses = [fake_response(429, RATE_429) for _ in range(self.N - 1)]
+        responses.append(fake_response(200, OVERVIEW_BODY))
+        responses += [fake_response(429, RATE_429) for _ in range(self.N - 1)]
+        api, store, _ = make_api(responses)
+        self.call(api, self.N - 1)
+        self.assertIsNotNone(api.get_overview(retry=False))
+        self.call(api, self.N - 1)
+        store.counter.mark_exhausted.assert_not_called()
+
+    def test_other_error_status_in_between_resets(self):
+        for status in (400, 404, 500):
+            with self.subTest(status=status):
+                responses = [fake_response(429, RATE_429) for _ in range(self.N - 1)]
+                responses.append(fake_response(status))
+                responses += [fake_response(429, RATE_429) for _ in range(self.N - 1)]
+                api, store, _ = make_api(responses)
+                self.call(api, 2 * self.N - 1)
+                store.counter.mark_exhausted.assert_not_called()
+
+    def test_timeouts_and_network_errors_neither_count_nor_reset(self):
+        responses = [fake_response(429, RATE_429) for _ in range(self.N - 1)]
+        responses += [
+            requests.exceptions.Timeout(),
+            requests.exceptions.ConnectionError("boom"),
+            TransientAuthError("deferred"),
+            QuotaBlocked("stopped"),
+        ]
+        responses.append(fake_response(429, RATE_429))
+        api, store, _ = make_api(responses)
+        self.call(api, self.N - 1 + 4)
+        # Not counted: still one short of the threshold
+        store.counter.mark_exhausted.assert_not_called()
+        # Not reset: the next 429 is number N
+        self.call(api, 1)
+        store.counter.mark_exhausted.assert_called_once_with()
+
+    def test_timeouts_alone_never_stop(self):
+        api, store, _ = make_api([requests.exceptions.Timeout() for _ in range(self.N * 2)])
+        self.call(api, self.N * 2)
+        store.counter.mark_exhausted.assert_not_called()
+
+    def test_monthly_body_stops_at_first_429(self):
+        api, store, _ = make_api([fake_response(429, MONTHLY_429)])
+        out = self.call(api, 1)
+        store.counter.mark_exhausted.assert_called_once_with()
+        self.assertNotIn("consecutive 429", out)
+
+    def test_monthly_body_at_threshold_uses_monthly_path_only(self):
+        responses = [fake_response(429, RATE_429) for _ in range(self.N - 1)]
+        responses.append(fake_response(429, MONTHLY_429))
+        api, store, _ = make_api(responses)
+        out = self.call(api, self.N)
+        store.counter.mark_exhausted.assert_called_once_with()
+        self.assertNotIn("consecutive 429", out)
+
+    def test_count_spans_different_endpoints(self):
+        api, store, _ = make_api([fake_response(429, RATE_429) for _ in range(self.N)])
+        with self.assertLogs(level="WARNING"):
+            for _ in range(self.N // 2):
+                self.assertIsNone(api.get_overview(retry=False))
+                self.assertIsNone(api.get_storage_temperature())
+        store.counter.mark_exhausted.assert_called_once_with()
+
+    def test_threshold_without_counter_does_not_crash(self):
+        api, store, _ = make_api([fake_response(429, RATE_429) for _ in range(self.N)])
+        store.counter = None
+        out = self.call(api, self.N)
+        self.assertIn("consecutive 429", out)
+
+    def test_count_restarts_after_stop(self):
+        api, store, _ = make_api([fake_response(429, RATE_429) for _ in range(self.N + 1)])
+        self.call(api, self.N + 1)
+        store.counter.mark_exhausted.assert_called_once_with()
+
+
 if __name__ == "__main__":
     unittest.main()

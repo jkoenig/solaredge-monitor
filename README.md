@@ -91,6 +91,7 @@ Weil jeder Aufruf Kontingent kostet, zählt der Monitor mit. Der Zähler liegt i
 
 - Ab 1500 Aufrufen im Zyklus greift eine weiche Bremse: nur noch unverzichtbare Aufrufe.
 - Bei 1800 Aufrufen stoppt der Monitor alle Aufrufe bis zum Zyklusende und zeigt "Kontingent aufgebraucht" mit dem Datum der nächsten Werte.
+- Meldet SolarEdge selbst, dass das Monatskontingent aufgebraucht ist (Antwort 429), stoppt der Monitor sofort, auch wenn der eigene Zähler tiefer steht. Dasselbe gilt als Absicherung, wenn sechs Aufrufe hintereinander mit 429 abgelehnt werden, ohne dass der Grund erkennbar ist.
 
 Einmal täglich schreibt der Dienst eine Zusammenfassung ins Journal, zum Beispiel:
 
