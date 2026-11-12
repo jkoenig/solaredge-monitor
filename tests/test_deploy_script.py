@@ -11,11 +11,14 @@ DEPLOY = ROOT / "deploy.sh"
 UNIT = ROOT / "solaredge-monitor.service"
 
 class DeployScriptTest(unittest.TestCase):
-    def run_deploy(self, dst_mode, test_flag="1", dst_override=None):
+    def run_deploy(self, dst_mode, test_flag="1", dst_override=None,
+                   service_active=True):
         """dst_mode: 'missing', 'different' or 'identical'.
 
         test_flag: value for SOLAREDGE_DEPLOY_TEST (None = not set).
         dst_override: value for SOLAREDGE_UNIT_DST instead of the temp file.
+        service_active: False makes the fake systemctl report a dead service
+        (is-active and status exit 3, as systemd does).
         """
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
@@ -28,12 +31,19 @@ class DeployScriptTest(unittest.TestCase):
             (tmp / "venv" / "bin" / "pip").chmod(0o755)
             bindir = tmp / "bin"
             bindir.mkdir()
-            for name in ("git", "sudo"):
+            for name in ("git", "sudo", "sleep"):
                 p = bindir / name
                 p.write_text(
                     '#!/bin/bash\necho "$@" >> "%s/%s.log"\nexit 0\n' % (tmp, name)
                 )
                 p.chmod(0o755)
+            if not service_active:
+                (bindir / "sudo").write_text(
+                    '#!/bin/bash\necho "$@" >> "%s/sudo.log"\n'
+                    'case "$1 $2" in\n'
+                    '  "systemctl is-active"|"systemctl status") exit 3 ;;\n'
+                    'esac\nexit 0\n' % tmp
+                )
             dst = tmp / "dst.service"
             if dst_mode == "different":
                 dst.write_text("[Unit]\nDescription=old\n")
@@ -85,6 +95,38 @@ class DeployScriptTest(unittest.TestCase):
         self.assertFalse([l for l in sudo if l.startswith("install")])
         self.assertNotIn("systemctl daemon-reload", sudo)
         self.assertIn("systemctl restart solaredge-monitor", sudo)
+
+    def test_running_service_reports_success(self):
+        r, sudo, _, _, _ = self.run_deploy("identical")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("Deployment Complete!", r.stdout)
+        self.assert_in_order(sudo, [
+            "systemctl restart solaredge-monitor",
+            "systemctl is-active --quiet solaredge-monitor",
+            "systemctl status solaredge-monitor --no-pager -l",
+        ])
+
+    def test_dead_service_fails_without_success_banner(self):
+        for mode in ("identical", "different"):
+            r, sudo, _, _, _ = self.run_deploy(mode, service_active=False)
+            self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+            self.assertNotIn("Deployment Complete!", r.stdout)
+            self.assertNotIn("✓ Service restarted", r.stdout)
+            self.assertIn("ERROR: service is not running", r.stdout)
+            self.assertIn("Deployment FAILED", r.stdout)
+            # The status listing is still shown for diagnosis
+            self.assert_in_order(sudo, [
+                "systemctl restart solaredge-monitor",
+                "systemctl is-active --quiet solaredge-monitor",
+                "systemctl status solaredge-monitor --no-pager -l",
+            ])
+
+    def test_status_listing_failure_does_not_fail_a_good_deploy(self):
+        text = DEPLOY.read_text()
+        self.assertEqual(
+            text.count("systemctl status solaredge-monitor --no-pager -l || true"), 2)
+        self.assertNotIn(
+            "systemctl status solaredge-monitor --no-pager -l\n", text)
 
     REAL_DST = "/etc/systemd/system/solaredge-monitor.service"
 

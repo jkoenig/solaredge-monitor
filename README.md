@@ -152,7 +152,7 @@ cd /home/pi/solaredge-monitor
 ./deploy.sh
 ```
 
-`./deploy.sh` holt den neuen Code per `git pull`, aktualisiert die Abhängigkeiten, installiert die systemd-Unit, falls sie sich geändert hat, und startet den Dienst neu.
+`./deploy.sh` holt den neuen Code per `git pull`, aktualisiert die Abhängigkeiten, installiert die systemd-Unit, falls sie sich geändert hat, und startet den Dienst neu. Läuft der Dienst danach nicht, zeigt das Skript den Status und endet mit einem Fehler.
 
 ## Entwicklung ohne Hardware
 

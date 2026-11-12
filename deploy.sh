@@ -76,7 +76,21 @@ main() {
   # Step 4: Restart service
   echo "[4/4] Restarting solaredge-monitor service..."
   sudo systemctl restart solaredge-monitor
-  echo "  ✓ Service restarted"
+  # Give a service that crashes right at start a moment to show it
+  # (Type=simple counts as active as soon as the process is spawned).
+  sleep 3
+  if ! sudo systemctl is-active --quiet solaredge-monitor; then
+    echo "  ERROR: service is not running after the restart"
+    echo ""
+    echo "Service status:"
+    echo ""
+    sudo systemctl status solaredge-monitor --no-pager -l || true
+    echo ""
+    echo "Deployment FAILED: see the status above and"
+    echo "  journalctl -u solaredge-monitor -n 50"
+    exit 1
+  fi
+  echo "  ✓ Service restarted and running"
   echo ""
 
   echo "========================================"
@@ -85,7 +99,8 @@ main() {
   echo ""
   echo "Service status:"
   echo ""
-  sudo systemctl status solaredge-monitor --no-pager -l
+  # "status" exits non-zero for some states; it is only a listing here.
+  sudo systemctl status solaredge-monitor --no-pager -l || true
   echo ""
 }
 
