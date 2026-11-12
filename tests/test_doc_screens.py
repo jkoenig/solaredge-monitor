@@ -52,6 +52,23 @@ class DocScreensTest(unittest.TestCase):
                     name,
                 )
 
+    def test_committed_images_carry_no_metadata(self):
+        # The internals scan skips tracked binary files, so the committed
+        # screenshots must contain image data only (no text/EXIF chunks).
+        import struct
+        files = sorted((ROOT / "docs" / "screens").glob("*.png"))
+        self.assertEqual({p.stem for p in files}, EXPECTED)
+        for path in files:
+            data = path.read_bytes()
+            self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n", path.name)
+            pos, chunks = 8, []
+            while pos < len(data):
+                length, kind = struct.unpack(">I4s", data[pos:pos + 8])
+                chunks.append(kind.decode("ascii"))
+                pos += 12 + length
+            self.assertEqual(pos, len(data), path.name)  # nothing after IEND
+            self.assertEqual(set(chunks), {"IHDR", "IDAT", "IEND"}, path.name)
+
 
 if __name__ == "__main__":
     unittest.main()

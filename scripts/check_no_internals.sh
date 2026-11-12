@@ -9,6 +9,16 @@ set -euo pipefail
 # The script prints locations (paths, hashes, counts) only,
 # never the matched text.
 #
+# What --tree scans:
+#   - tracked text files
+#   - untracked files that are not git-ignored (text and binary),
+#     reported as "untracked: <path>"; they are the next candidates
+#     for "git add"
+# What --tree does NOT scan:
+#   - tracked binary files (git grep -I skips them, for example the
+#     PNGs under docs/screens; a test keeps those free of metadata)
+#   - git-ignored files (they cannot be committed by accident)
+#
 # Usage:
 #   scripts/check_no_internals.sh [--tree|--history] [--require-denylist]
 #
@@ -54,6 +64,15 @@ if [ "$MODE" = "tree" ]; then
   while IFS= read -r f; do
     [ -n "$f" ] && hit "$f"
   done < <(git grep -I -i -F -l -f "$DENYLIST" -- . ':!.planning' || true)
+  # Untracked, not ignored files: not in the index yet, so git grep
+  # does not see them. The denylist itself is never reported.
+  while IFS= read -r -d '' f; do
+    [ -f "$f" ] || continue
+    [ "$f" -ef "$DENYLIST" ] && continue
+    if grep -q -i -F -f "$DENYLIST" -- "$f" 2>/dev/null; then
+      hit "untracked: $f"
+    fi
+  done < <(git ls-files --others --exclude-standard -z -- . ':!.planning')
 else
   if [ "$HAVE_LIST" -eq 1 ]; then
     # (1) file contents of every commit

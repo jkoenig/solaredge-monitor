@@ -13,7 +13,7 @@ SCRIPT = ROOT / "scripts" / "check_no_internals.sh"
 WORD = "zebraflux"
 
 
-class HistoryScanTest(unittest.TestCase):
+class RepoCase(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
@@ -48,9 +48,11 @@ class HistoryScanTest(unittest.TestCase):
         self.git("commit", "-q", "--allow-empty", "-m", message, env=env)
         return self.git("rev-parse", "HEAD")
 
+    MODE = "--history"
+
     def scan(self):
         return subprocess.run(
-            ["bash", str(SCRIPT), "--history", "--require-denylist"],
+            ["bash", str(SCRIPT), self.MODE, "--require-denylist"],
             cwd=str(self.repo), env=self.env,
             capture_output=True, text=True, timeout=60,
         )
@@ -58,6 +60,70 @@ class HistoryScanTest(unittest.TestCase):
     def assert_no_leak(self, r):
         self.assertNotIn(WORD, (r.stdout + r.stderr).lower())
 
+
+class TreeScanTest(RepoCase):
+    MODE = "--tree"
+
+    def write(self, name, data):
+        path = self.repo / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if isinstance(data, bytes):
+            path.write_bytes(data)
+        else:
+            path.write_text(data)
+
+    def add_commit(self, *names):
+        self.git("add", "--", *names)
+        self.git("commit", "-q", "-m", "add files")
+
+    def test_clean_tree(self):
+        self.write("a.txt", "nothing special\n")
+        self.add_commit("a.txt")
+        self.write("new.txt", "also harmless\n")
+        r = self.scan()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(r.stdout.strip(), "CLEAN")
+
+    def test_tracked_hit_prints_path_only(self):
+        self.write("a.txt", "line with %s inside\n" % WORD.upper())
+        self.add_commit("a.txt")
+        r = self.scan()
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assert_no_leak(r)
+        self.assertEqual(r.stdout.splitlines(), ["a.txt", "HITS: 1"])
+
+    def test_untracked_text_and_binary_hits_print_path_only(self):
+        self.write("a.txt", "clean\n")
+        self.add_commit("a.txt")
+        self.write("notes/new file.txt", "some %s here\n" % WORD)
+        self.write("img.bin", b"\x89PNG\x00\x01" + WORD.encode() + b"\x00\xff")
+        self.write("fine.txt", "clean too\n")
+        r = self.scan()
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assert_no_leak(r)
+        self.assertEqual(
+            sorted(r.stdout.splitlines()),
+            ["HITS: 2", "untracked: img.bin", "untracked: notes/new file.txt"])
+
+    def test_ignored_files_and_the_denylist_are_not_reported(self):
+        self.write(".gitignore", "private.txt\n")
+        self.add_commit(".gitignore")
+        self.write("private.txt", "%s\n" % WORD)
+        # a denylist inside the repo that is not ignored must not hit itself
+        inside = self.repo / "list.local"
+        inside.write_text(WORD + "\n")
+        self.env["INTERNALS_DENYLIST"] = str(inside)
+        r = self.scan()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(r.stdout.strip(), "CLEAN")
+
+    def test_header_documents_the_scan_limits(self):
+        text = SCRIPT.read_text()
+        self.assertIn("What --tree does NOT scan", text)
+        self.assertIn("tracked binary files", text)
+
+
+class HistoryScanTest(RepoCase):
     def test_clean_history(self):
         self.commit("first\n\nnothing special here")
         r = self.scan()
