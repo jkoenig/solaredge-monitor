@@ -288,9 +288,18 @@ def local_config_path() -> str:
 
 
 def load_local_config(path: Optional[str] = None) -> Dict[str, str]:
-    """Read the git-ignored local settings file; a missing file means defaults."""
+    """Read the git-ignored local settings file; a missing file means defaults.
+
+    Exception: a path set explicitly via SOLAREDGE_LOGIN_CONFIG must exist.
+    A typo there must not silently fall back to the default host.
+    """
+    explicit = path is None and bool(os.environ.get(LOCAL_CONFIG_ENV))
     path = path or local_config_path()
     if not os.path.exists(path):
+        if explicit:
+            raise LoginError(
+                "Local config %s (set via %s) does not exist" % (path, LOCAL_CONFIG_ENV)
+            )
         return {}
     parser = configparser.ConfigParser(interpolation=None)
     try:

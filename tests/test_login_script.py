@@ -22,12 +22,14 @@ _PREV_CONFIG_ENV = None
 
 
 def setUpModule():
-    """Point the local config at a nonexistent path so no test reads a real file."""
+    """Point the local config at an empty temp file so no test reads a real file."""
     global _TMP_CONFIG_DIR, _PREV_CONFIG_ENV
     _TMP_CONFIG_DIR = tempfile.TemporaryDirectory()
     _PREV_CONFIG_ENV = os.environ.get("SOLAREDGE_LOGIN_CONFIG")
-    os.environ["SOLAREDGE_LOGIN_CONFIG"] = os.path.join(
-        _TMP_CONFIG_DIR.name, "does-not-exist.ini")
+    empty = os.path.join(_TMP_CONFIG_DIR.name, "empty.ini")
+    with open(empty, "w") as fh:
+        fh.write("[login]\n")
+    os.environ["SOLAREDGE_LOGIN_CONFIG"] = empty
 
 
 def tearDownModule():
@@ -345,8 +347,7 @@ class LocalConfigTest(unittest.TestCase):
         return path
 
     def _run_main(self, ini_text, argv, op_stdout=None):
-        path = self._write(ini_text) if ini_text is not None else \
-            os.path.join(tempfile.gettempdir(), "no-such-solaredge-login.ini")
+        path = self._write(ini_text if ini_text is not None else "[login]\n")
         item = {"fields": [{"label": "Client ID", "value": "cid"},
                            {"label": "Client Secret", "value": "sec"}]}
         done = mock.Mock(returncode=0, stdout=json.dumps(item), stderr="")
@@ -364,6 +365,32 @@ class LocalConfigTest(unittest.TestCase):
 
     def test_missing_file_returns_empty(self):
         self.assertEqual(sl.load_local_config("/nonexistent/x.ini"), {})
+
+    def test_missing_default_file_returns_empty(self):
+        env = dict(os.environ)
+        env.pop("SOLAREDGE_LOGIN_CONFIG", None)
+        with mock.patch.dict(os.environ, env, clear=True), \
+                mock.patch.object(sl, "LOCAL_CONFIG_NAME", "no-such-file.local.ini"):
+            self.assertEqual(sl.load_local_config(), {})
+
+    def test_env_path_to_missing_file_raises(self):
+        missing = os.path.join(self._write("[login]\n") + ".typo")
+        with mock.patch.dict(os.environ, {"SOLAREDGE_LOGIN_CONFIG": missing}):
+            with self.assertRaises(sl.LoginError) as cm:
+                sl.load_local_config()
+        self.assertIn("SOLAREDGE_LOGIN_CONFIG", str(cm.exception))
+        self.assertIn(missing, str(cm.exception))
+
+    def test_main_env_path_to_missing_file_exits_1_without_side_effects(self):
+        missing = os.path.join(self._write("[login]\n") + ".typo")
+        with mock.patch.dict(os.environ, {"SOLAREDGE_LOGIN_CONFIG": missing}), \
+                mock.patch.object(sl.subprocess, "run") as run, \
+                mock.patch.object(sl, "update_remote_env") as upd, \
+                mock.patch("sys.stderr", new_callable=io.StringIO) as err:
+            self.assertEqual(sl.main(["--secrets-only"]), 1)
+        run.assert_not_called()
+        upd.assert_not_called()
+        self.assertIn("SOLAREDGE_LOGIN_CONFIG", err.getvalue())
 
     def test_reads_values(self):
         path = self._write("[login]\nhost = pi.example\nremote_dir = /srv/x\n"
