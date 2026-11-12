@@ -2,6 +2,8 @@
 Description=SolarEdge Off-Grid Monitor
 Wants=network-online.target systemd-time-wait-sync.service
 After=network-online.target time-sync.target
+# Unattended display: never give up restarting (no start rate limit).
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
@@ -11,8 +13,6 @@ WorkingDirectory=/home/pi/solaredge-monitor
 ExecStart=/home/pi/solaredge-monitor/venv/bin/python3 main.py
 Restart=always
 RestartSec=10
-StartLimitIntervalSec=200
-StartLimitBurst=5
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=solaredge-monitor

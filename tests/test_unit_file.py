@@ -44,6 +44,17 @@ class UnitFileTest(unittest.TestCase):
         self.assertEqual(svc["Restart"], "always")
         self.assertEqual(cp["Install"]["WantedBy"], "multi-user.target")
 
+    def test_start_limit_keys_live_in_unit_section(self):
+        # systemd ignores StartLimit* keys in [Service]; they belong in [Unit].
+        cp = load_unit()
+        for key in cp["Service"]:
+            self.assertFalse(key.startswith("StartLimit"), key)
+        # 0 disables the start rate limit: restart forever on a headless device.
+        self.assertEqual(cp["Unit"]["StartLimitIntervalSec"], "0")
+        self.assertNotIn("StartLimitBurst", cp["Unit"])
+        self.assertEqual(cp["Service"]["Restart"], "always")
+        self.assertEqual(cp["Service"]["RestartSec"], "10")
+
     def test_install_sh_installs_unit_root_owned(self):
         text = (ROOT / "install.sh").read_text()
         self.assertIn(
