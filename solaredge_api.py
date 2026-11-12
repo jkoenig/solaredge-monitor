@@ -14,16 +14,19 @@ A 429 with the monthly-limit detail switches the call counter to stopped at
 once. As a fallback (in case SolarEdge changes that wording), the client also
 counts consecutive 429 responses in memory: CONSECUTIVE_429_STOP_THRESHOLD of
 them in a row without a recognised monthly-limit body stop the counter the
-same way. Any other HTTP response resets that count; network errors and
-timeouts neither count nor reset. The threshold is higher than the number of
-calls one fetch round can send, so a short per-minute rate limit inside a
-single round cannot trigger it.
+same way, but only if that run of 429s has lasted at least
+CONSECUTIVE_429_MIN_SPAN_SECONDS. Any other HTTP response resets the count;
+network errors and timeouts neither count nor reset. The threshold is higher
+than the number of calls one fetch round can send and the minimum span is
+longer than one fetch interval, so a short per-minute rate limit cannot
+trigger it.
 
 Logs never contain the site id, serial numbers, tokens, params or response
 bodies. Endpoints are logged as path templates with a literal "{site_id}".
 """
 
 import logging
+import math
 import time
 from datetime import datetime, timedelta
 from datetime import time as dt_time
@@ -44,6 +47,9 @@ MONTHLY_LIMIT_DETAIL = "Monthly credit limit reached."
 # between) are treated like the monthly-limit 429, even if the body is not
 # recognised. Must stay above the number of calls one fetch round can send.
 CONSECUTIVE_429_STOP_THRESHOLD = 6
+# ...and the run of 429s must have lasted at least this long, so a rate limit
+# that clears within minutes can never stop the month.
+CONSECUTIVE_429_MIN_SPAN_SECONDS = 3600
 
 
 def _is_monthly_limit(err_body) -> bool:
@@ -82,7 +88,10 @@ def to_kwh(value, unit) -> float:
     factor = _UNIT_FACTORS_TO_KWH.get(str(unit).upper())
     if factor is None:
         raise ValueError("unknown energy unit")
-    return float(value) * factor
+    result = float(value) * factor
+    if not math.isfinite(result):
+        raise ValueError("non-finite energy value")
+    return result
 
 
 def last_non_null(values) -> Optional[float]:
@@ -119,6 +128,7 @@ class SolarEdgeAPI:
         self.quota_blocked = False
         # Consecutive HTTP 429 responses (in memory only, not persisted).
         self._consecutive_429 = 0
+        self._first_429_at: Optional[datetime] = None
 
     def _now(self) -> datetime:
         return self._now_fn()
@@ -162,9 +172,14 @@ class SolarEdgeAPI:
             # Only real HTTP responses reach this point: a 429 counts, every
             # other status resets. Timeouts/network errors returned above.
             if status == 429:
+                now = self._now()
+                if self._consecutive_429 == 0 or self._first_429_at is None \
+                        or now < self._first_429_at:
+                    self._first_429_at = now
                 self._consecutive_429 += 1
             else:
                 self._consecutive_429 = 0
+                self._first_429_at = None
 
             if status >= 500:
                 if attempt < attempts:
@@ -190,15 +205,22 @@ class SolarEdgeAPI:
                 counter = getattr(self.token_store, "counter", None)
                 if _is_monthly_limit(err_body):
                     self._consecutive_429 = 0
+                    self._first_429_at = None
                     if counter is not None:
                         counter.mark_exhausted()
                     logging.error(
                         "SolarEdge monthly credit limit reached; "
                         "all API calls stop until the next billing cycle"
                     )
-                elif self._consecutive_429 >= CONSECUTIVE_429_STOP_THRESHOLD:
+                elif (
+                    self._consecutive_429 >= CONSECUTIVE_429_STOP_THRESHOLD
+                    and self._first_429_at is not None
+                    and (self._now() - self._first_429_at).total_seconds()
+                    >= CONSECUTIVE_429_MIN_SPAN_SECONDS
+                ):
                     count = self._consecutive_429
                     self._consecutive_429 = 0
+                    self._first_429_at = None
                     logging.warning(
                         f"API stop triggered by {count} consecutive 429 responses "
                         "without a recognised monthly-limit body; "

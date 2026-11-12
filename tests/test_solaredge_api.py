@@ -2,7 +2,7 @@
 
 import sys
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
@@ -636,6 +636,13 @@ class Consecutive429Tests(unittest.TestCase):
 
     N = solaredge_api.CONSECUTIVE_429_STOP_THRESHOLD
 
+    def setUp(self):
+        # The count logic is tested without the minimum time span;
+        # Consecutive429SpanTests covers the span.
+        patcher = mock.patch.object(solaredge_api, "CONSECUTIVE_429_MIN_SPAN_SECONDS", 0)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def call(self, api, times):
         with self.assertLogs(level="WARNING") as cm:
             for _ in range(times):
@@ -745,6 +752,74 @@ class Consecutive429Tests(unittest.TestCase):
         api, store, _ = make_api([fake_response(429, RATE_429) for _ in range(self.N + 1)])
         self.call(api, self.N + 1)
         store.counter.mark_exhausted.assert_called_once_with()
+
+
+
+class Consecutive429SpanTests(unittest.TestCase):
+    """The fallback stop needs N 429s AND a minimum duration of the run."""
+
+    N = solaredge_api.CONSECUTIVE_429_STOP_THRESHOLD
+    SPAN = solaredge_api.CONSECUTIVE_429_MIN_SPAN_SECONDS
+
+    def make(self, responses):
+        self.clock = [datetime(2026, 1, 15, 10, 0, tzinfo=SITE_TZ)]
+        store = mock.MagicMock()
+        store.site_id = FAKE_SITE_ID
+        store.authorized_request.side_effect = responses
+        api = SolarEdgeAPI(store, sleep=mock.MagicMock(), now_fn=lambda: self.clock[0])
+        return api, store
+
+    def advance(self, seconds):
+        self.clock[0] = self.clock[0] + timedelta(seconds=seconds)
+
+    def hit(self, api, times=1):
+        with self.assertLogs(level="WARNING"):
+            for _ in range(times):
+                self.assertIsNone(api.get_overview(retry=False))
+
+    def test_span_is_longer_than_one_fetch_interval(self):
+        self.assertGreaterEqual(self.SPAN, 3600)
+
+    def test_many_429s_within_minutes_never_stop(self):
+        api, store = self.make([fake_response(429, RATE_429) for _ in range(self.N * 3)])
+        for _ in range(self.N * 3):
+            self.hit(api)
+            self.advance(60)
+        store.counter.mark_exhausted.assert_not_called()
+
+    def test_stops_once_the_run_is_long_enough(self):
+        api, store = self.make([fake_response(429, RATE_429) for _ in range(self.N + 1)])
+        self.hit(api, self.N)
+        store.counter.mark_exhausted.assert_not_called()
+        self.advance(self.SPAN)
+        self.hit(api)
+        store.counter.mark_exhausted.assert_called_once_with()
+
+    def test_success_restarts_the_span(self):
+        responses = [fake_response(429, RATE_429) for _ in range(self.N)]
+        responses.append(fake_response(200, OVERVIEW_BODY))
+        responses += [fake_response(429, RATE_429) for _ in range(self.N)]
+        api, store = self.make(responses)
+        self.hit(api, self.N)
+        self.advance(self.SPAN)
+        self.assertIsNotNone(api.get_overview(retry=False))
+        self.hit(api, self.N)
+        store.counter.mark_exhausted.assert_not_called()
+
+    def test_clock_jumping_back_restarts_the_span(self):
+        api, store = self.make([fake_response(429, RATE_429) for _ in range(self.N + 1)])
+        self.hit(api, self.N)
+        self.advance(-7200)
+        self.hit(api)
+        store.counter.mark_exhausted.assert_not_called()
+
+
+class ToKwhFiniteTests(unittest.TestCase):
+    def test_non_finite_values_are_rejected(self):
+        for bad in (float("inf"), float("-inf"), float("nan")):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError):
+                    solaredge_api.to_kwh(bad, "WH")
 
 
 if __name__ == "__main__":
