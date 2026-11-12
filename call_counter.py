@@ -255,11 +255,12 @@ class CallCounter:
     def _fail_safe(self, why: str, move: bool = True) -> None:
         """Unusable counter file: keep it aside and start conservatively.
 
-        Never start from 0 (that would grant a fresh budget); start at the soft
-        limit so the brake is active until the owner re-seeds the counter.
+        Never start from 0 (that would grant a fresh budget). The true count
+        is unknown, so start at the hard limit: no call is sent until the
+        owner re-seeds the counter or the cycle resets.
         The fail-safe state is persisted at once so a restart before the first
         regular write cannot see "no file" and start at 0. If that write fails,
-        the memory state stays at the soft limit, and the surviving `.corrupt`
+        the memory state stays at the hard limit, and the surviving `.corrupt`
         sibling makes the next start fail safe again (see `_load`).
         """
         self._reset_state()
@@ -273,14 +274,14 @@ class CallCounter:
                 moved = False
                 kept = "could not be moved aside"
         self._cycle_start = cycle_start_for(self._today(None), self.billing_day)
-        self._cycle_total = self.soft_limit
+        self._cycle_total = self.hard_limit
         if moved:
             # Do not overwrite a bad file that could not be moved aside: it
             # keeps triggering the fail-safe on the next start anyway.
             self._persist()
         logging.error(
-            f"Call counter file {why} ({kept}); starting at the soft limit "
-            f"{self.soft_limit}/{self.hard_limit} (brake). Re-seed with "
+            f"Call counter file {why} ({kept}); starting at the hard limit "
+            f"{self.hard_limit}/{self.hard_limit} (stopped). Re-seed with "
             "scripts/seed_call_counter.py"
         )
 

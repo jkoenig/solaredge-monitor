@@ -92,6 +92,7 @@ Weil jeder Aufruf Kontingent kostet, zählt der Monitor mit. Der Zähler liegt i
 - Ab 1500 Aufrufen im Zyklus greift eine weiche Bremse: nur noch unverzichtbare Aufrufe.
 - Bei 1800 Aufrufen stoppt der Monitor alle Aufrufe bis zum Zyklusende und zeigt "Kontingent aufgebraucht" mit dem Datum der nächsten Werte.
 - Meldet SolarEdge selbst, dass das Monatskontingent aufgebraucht ist (Antwort 429), stoppt der Monitor sofort, auch wenn der eigene Zähler tiefer steht. Dasselbe gilt als Absicherung, wenn mindestens sechs Aufrufe hintereinander und über mindestens eine Stunde mit 429 abgelehnt werden, ohne dass der Grund erkennbar ist. War ein solcher Stopp ein Fehlalarm, hebt ihn das Seed-Skript wieder auf: Dienst stoppen, `venv/bin/python3 scripts/seed_call_counter.py --count <aktueller Stand> --force` als Benutzer `pi` ausführen, Dienst starten.
+- Ist die Zählerdatei beschädigt oder unlesbar, ist der echte Stand unbekannt. Der Monitor legt die Datei als `.calls.json.corrupt` beiseite und stoppt alle Aufrufe, bis der Zähler mit dem Seed-Skript neu gesetzt wird oder der Zyklus neu beginnt.
 
 Einmal täglich schreibt der Dienst eine Zusammenfassung ins Journal, zum Beispiel:
 

@@ -102,48 +102,48 @@ class PersistenceTests(CounterTestBase):
     def _fixed(self, **kw):
         return self.make(now_fn=lambda: zt(2026, 11, 11), **kw)
 
-    def test_corrupt_file_fails_safe_at_soft_limit(self):
+    def test_corrupt_file_fails_safe_at_hard_limit(self):
         self.path.write_text("{not json")
         with self.assertLogs(level="ERROR") as cm:
             c = self._fixed()
         self.assertTrue(any("invalid" in m for m in cm.output))
         t = zt(2026, 11, 11)
-        self.assertEqual(c.cycle_total(t), call_counter.SOFT_LIMIT)
-        self.assertEqual(c.state(t), BRAKE)
+        self.assertEqual(c.cycle_total(t), call_counter.HARD_LIMIT)
+        self.assertEqual(c.state(t), STOPPED)
         corrupt = self.path.with_name(self.path.name + ".corrupt")
         self.assertEqual(corrupt.read_text(), "{not json")
         # fail-safe state is persisted immediately (no restart window at 0)
         self.assertEqual(json.loads(self.path.read_text())["cycle_total"],
-                         call_counter.SOFT_LIMIT)
+                         call_counter.HARD_LIMIT)
         with self.assertNoLogs(level="ERROR"):
             again = self._fixed()
-        self.assertEqual(again.cycle_total(t), call_counter.SOFT_LIMIT)
+        self.assertEqual(again.cycle_total(t), call_counter.HARD_LIMIT)
 
     def test_invalid_utf8_file_fails_safe(self):
         self.path.write_bytes(b"\xff\xfe\x80 not text")
         with self.assertLogs(level="ERROR"):
             c = self._fixed()
-        self.assertEqual(c.cycle_total(zt(2026, 11, 11)), call_counter.SOFT_LIMIT)
+        self.assertEqual(c.cycle_total(zt(2026, 11, 11)), call_counter.HARD_LIMIT)
 
     def test_deeply_nested_json_fails_safe(self):
         self.path.write_text("[" * 200000 + "]" * 200000)
         with self.assertLogs(level="ERROR"):
             c = self._fixed()
-        self.assertEqual(c.cycle_total(zt(2026, 11, 11)), call_counter.SOFT_LIMIT)
+        self.assertEqual(c.cycle_total(zt(2026, 11, 11)), call_counter.HARD_LIMIT)
 
-    def test_fail_safe_persist_failure_still_soft_limit_and_restart_safe(self):
+    def test_fail_safe_persist_failure_still_hard_limit_and_restart_safe(self):
         self.path.write_text("{not json")
         t = zt(2026, 11, 11)
         with mock.patch.object(CallCounter, "_persist", return_value=False):
             with self.assertLogs(level="ERROR"):
                 c = self._fixed()
         self.assertFalse(self.path.exists())
-        self.assertEqual(c.cycle_total(t), call_counter.SOFT_LIMIT)
+        self.assertEqual(c.cycle_total(t), call_counter.HARD_LIMIT)
         # restart before any persist: .corrupt sibling must not mean 0
         with self.assertLogs(level="ERROR"):
             again = self._fixed()
-        self.assertEqual(again.cycle_total(t), call_counter.SOFT_LIMIT)
-        self.assertEqual(again.state(t), BRAKE)
+        self.assertEqual(again.cycle_total(t), call_counter.HARD_LIMIT)
+        self.assertEqual(again.state(t), STOPPED)
 
     def test_fresh_start_without_corrupt_sibling_is_zero(self):
         self.assertEqual(self._fixed().cycle_total(zt(2026, 11, 11)), 0)
@@ -161,11 +161,11 @@ class PersistenceTests(CounterTestBase):
             again = self._fixed()
         self.assertEqual(again.cycle_total(t), 100)
 
-    def test_wrong_version_fails_safe_at_soft_limit(self):
+    def test_wrong_version_fails_safe_at_hard_limit(self):
         self.path.write_text(json.dumps({"version": 99}))
         with self.assertLogs(level="ERROR"):
             c = self._fixed()
-        self.assertEqual(c.cycle_total(zt(2026, 11, 11)), call_counter.SOFT_LIMIT)
+        self.assertEqual(c.cycle_total(zt(2026, 11, 11)), call_counter.HARD_LIMIT)
         self.assertTrue(self.path.with_name(self.path.name + ".corrupt").exists())
 
     def test_unreadable_file_fails_safe(self):
@@ -173,15 +173,20 @@ class PersistenceTests(CounterTestBase):
         with mock.patch.object(Path, "read_text", side_effect=PermissionError("no")):
             with self.assertLogs(level="ERROR"):
                 c = self._fixed()
-        self.assertEqual(c.cycle_total(zt(2026, 11, 11)), call_counter.SOFT_LIMIT)
+        self.assertEqual(c.cycle_total(zt(2026, 11, 11)), call_counter.HARD_LIMIT)
 
-    def test_fail_safe_then_acquire_continues_from_soft_limit(self):
+    def test_fail_safe_blocks_calls_until_reseeded(self):
         self.path.write_text("garbage")
         with self.assertLogs(level="ERROR"):
             c = self._fixed()
         t = zt(2026, 11, 11)
+        with self.assertLogs(level="WARNING"):
+            with self.assertRaises(QuotaBlocked):
+                c.acquire("overview", t)
+        self.assertEqual(self._fixed().cycle_total(t), call_counter.HARD_LIMIT)
+        self.assertEqual(c.seed(300, now=t, force=True), 300)
         c.acquire("overview", t)
-        self.assertEqual(self._fixed().cycle_total(t), call_counter.SOFT_LIMIT + 1)
+        self.assertEqual(self._fixed().cycle_total(t), 301)
 
     def test_bad_day_entry_keeps_cycle_total(self):
         t = zt(2026, 11, 11)
