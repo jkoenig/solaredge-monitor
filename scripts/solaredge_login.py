@@ -459,7 +459,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     try:
         cfg = load_local_config()
     except LoginError as e:
-        print("Fehler: %s" % e, file=sys.stderr)
+        print("Error: %s" % e, file=sys.stderr)
         return 1
     note = " (default from scripts/solaredge_login.local.ini if present)"
     ap = argparse.ArgumentParser(
@@ -521,7 +521,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print("The Pi now refreshes the tokens; this Mac keeps no copy.")
         return 0
     except LoginError as e:
-        print("Fehler: %s" % e, file=sys.stderr)
+        print("Error: %s" % e, file=sys.stderr)
         return 1
 
 

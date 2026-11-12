@@ -52,6 +52,22 @@ class DocScreensTest(unittest.TestCase):
                     name,
                 )
 
+    def test_committed_images_match_a_fresh_render(self):
+        # Pixels, not file bytes: the compression may differ between systems.
+        from PIL import Image
+        committed = ROOT / "docs" / "screens"
+        with tempfile.TemporaryDirectory() as tmp:
+            self._run(tmp)
+            for name in sorted(EXPECTED):
+                with Image.open(Path(tmp) / f"{name}.png") as fresh, \
+                        Image.open(committed / f"{name}.png") as kept:
+                    self.assertEqual(fresh.mode, kept.mode, name)
+                    self.assertEqual(fresh.size, kept.size, name)
+                    self.assertEqual(
+                        fresh.tobytes(), kept.tobytes(),
+                        f"{name}.png is out of date: run scripts/render_doc_screens.py",
+                    )
+
     def test_committed_images_carry_no_metadata(self):
         # The internals scan skips tracked binary files, so the committed
         # screenshots must contain image data only (no text/EXIF chunks).

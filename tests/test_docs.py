@@ -15,9 +15,15 @@ class EnvExampleTest(unittest.TestCase):
         self.text = (ROOT / ".env.example").read_text(encoding="utf-8")
 
     def test_every_config_key_is_documented(self):
-        config = (ROOT / "config.py").read_text(encoding="utf-8")
-        keys = set(re.findall(r'"((?:SOLAREDGE|FORECAST)_[A-Z_]+)"', config))
-        self.assertTrue(keys)
+        # All application modules, not only config.py: some keys are read
+        # elsewhere (for example the log file in logging_setup.py).
+        keys = set()
+        for module in sorted(ROOT.glob("*.py")):
+            keys |= set(re.findall(
+                r'"((?:SOLAREDGE|FORECAST)_[A-Z_]+)"',
+                module.read_text(encoding="utf-8")))
+        self.assertIn("SOLAREDGE_POLL_INTERVAL", keys)
+        self.assertIn("SOLAREDGE_LOG_FILE", keys)
         for key in sorted(keys):
             self.assertIn(key, self.text, f"{key} missing in .env.example")
 
